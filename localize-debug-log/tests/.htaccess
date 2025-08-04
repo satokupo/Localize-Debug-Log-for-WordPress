@@ -1,0 +1,14 @@
+# ディレクトリリスティング無効化
+Options -Indexes
+
+# デフォルトで全アクセス拒否
+<Files "*">
+    Order allow,deny
+    Deny from all
+</Files>
+
+# active/browser/ 配下のPHPファイルのみ例外的に許可
+<FilesMatch "^active/browser/.*\.php$">
+    Order allow,deny
+    Allow from all
+</FilesMatch>

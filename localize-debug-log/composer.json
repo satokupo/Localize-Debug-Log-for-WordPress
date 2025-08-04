@@ -1,0 +1,12 @@
+{
+    "require-dev": {
+        "phpunit/phpunit": "9.6"
+    },
+	"scripts": {
+		"test": "phpunit tests/active/",
+		"test-active": "phpunit tests/active/",
+		"test-all": "phpunit tests/",
+		"test-archive": "phpunit tests/archive/",
+		"test-pending": "phpunit tests/pending/"
+	}
+}
