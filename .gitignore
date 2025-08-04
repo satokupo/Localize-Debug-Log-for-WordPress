@@ -1,0 +1,17 @@
+## 作業環境
+vendor/
+vendor/*
+composer.lock
+.vscode/
+.vscode/*
+.cursor/
+.cursor/*
+.workbench/
+.workbench/*
+.DS_Store
+node_modules/
+node_modules/*
+kamui/
+
+## 機密ファイル
+env.php
