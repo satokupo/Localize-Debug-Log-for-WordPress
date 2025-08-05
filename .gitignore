@@ -13,3 +13,7 @@ kamui/
 
 ## 機密ファイル
 env.php
+
+## テスト環境
+dev/tests/logs/
+dev/tests/logs/*
