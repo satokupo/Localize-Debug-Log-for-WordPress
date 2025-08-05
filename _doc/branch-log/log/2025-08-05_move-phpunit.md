@@ -257,4 +257,19 @@ dev/
 ---
 
 ## コミットコメント
-{{実装チェックリストが完了後、ユーザーの明確な承認を得たあとでチャットに出力されたコミットコメントを記載}}
+
+```
+feat: PHPUnitテスト環境をdev/ディレクトリに移設
+
+- localize-debug-log/からdev/にテスト関連ファイルを移動
+  - composer.json, composer.lock, phpunit.xml
+  - .phpunit.result.cache, vendor/, tests/
+- パス修正を実施
+  - bootstrap.php: THEME_ROOT定義をプラグインディレクトリへの正しいパスに修正
+  - phpunit.xml: カバレッジ対象を../localize-debug-log/に修正
+- package.jsonを新規作成してルートからのテスト実行を可能に
+  - npm run test, test-active, test-pending, test-all
+  - PowerShell対応でcmd /c使用
+- プラグイン本体を本番用最小構成に整理
+- 動作確認済み：全テストコマンドが正常動作
+```
