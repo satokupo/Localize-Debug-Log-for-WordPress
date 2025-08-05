@@ -14,7 +14,7 @@ ini_set('display_errors', 1);
 
 // テストルートディレクトリの定義
 define('TESTS_ROOT', __DIR__);
-define('THEME_ROOT', dirname(__DIR__));
+define('THEME_ROOT', dirname(__DIR__, 2) . '/localize-debug-log');
 
 // WordPress環境の基本設定（簡素版）
 if (!defined('ABSPATH')) {

@@ -30,7 +30,7 @@
 
     <coverage>
         <include>
-            <directory>src/</directory>
+            <directory>../localize-debug-log/</directory>
         </include>
         <report>
             <html outputDirectory="tests/logs/coverage"/>

@@ -1,1 +1,1 @@
-{"version":1,"defects":[],"times":{"SampleTest::test_phpunit_environment":0.007,"SampleTest::test_php_environment":0.001,"SampleTest::test_file_structure":0}}
+{"version":1,"defects":[],"times":{"SampleTest::test_phpunit_environment":0.006,"SampleTest::test_php_environment":0.002,"SampleTest::test_file_structure":0}}
