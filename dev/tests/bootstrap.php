@@ -12,6 +12,13 @@
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
+// Composer autoload（WP_Mock用）
+require_once __DIR__ . '/../vendor/autoload.php';
+
+// WP_Mock の初期化
+WP_Mock::setUsePatchwork(true);
+WP_Mock::bootstrap();
+
 // テストルートディレクトリの定義
 define('TESTS_ROOT', __DIR__);
 define('THEME_ROOT', dirname(__DIR__, 2) . '/localize-debug-log');
