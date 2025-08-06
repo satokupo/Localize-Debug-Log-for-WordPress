@@ -93,12 +93,12 @@ localize-debug-log/
 
 ## 🚫 ライセンスと使用条件 / License & Usage Terms
 
-このプラグインの著作権は作成者に帰属し、**無断での再配布、改変、商用利用は禁止されています**。
+このプラグインの著作権は作成者に帰属し、**個人利用に限り自由に使用・改変できます**。ただし、**無断での再配布、商用利用（販売）は禁止されています**。
 技術力開示を目的として公開しており、OSSとしての再利用を意図したものではありません。
 WordPress公式ディレクトリへの登録も予定していません。
 
 All rights reserved by the author.
-Redistribution, modification, or commercial use is strictly prohibited.
+**Free for personal use and modification only.** However, redistribution or commercial use (sales) is strictly prohibited.
 This plugin is published solely for showcasing development capability.
 It is **not intended as an open-source contribution**.
 

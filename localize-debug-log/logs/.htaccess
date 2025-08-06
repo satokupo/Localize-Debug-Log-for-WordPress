@@ -1,0 +1,18 @@
+# Localize Debug Log for WordPress - セキュリティ保護
+# ログファイルとディレクトリコンテンツへの直接アクセスをブロック
+
+# このディレクトリ内の全ファイルへのアクセスを拒否
+Deny from all
+
+# 新しいApacheバージョン (2.4+) 用の代替設定
+<RequireAll>
+    Require all denied
+</RequireAll>
+
+# 何らかの形でアクセスが許可されてもディレクトリリストを防止
+Options -Indexes
+
+# 特定のログファイルタイプへのアクセスを防止
+<FilesMatch "\.(log|txt|csv)$">
+    Deny from all
+</FilesMatch>
