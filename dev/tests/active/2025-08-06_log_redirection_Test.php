@@ -54,18 +54,18 @@ class LogRedirection_Test extends PHPUnit\Framework\TestCase
     /**
      * ini_set による error_log 設定変更テスト
      */
-    public function test_setup_error_log_redirection()
+        public function test_setup_error_log_redirection()
     {
-                // 関数実行前の状態取得
-        $original_error_log = ini_get('error_log');
-
         // 関数実行
         ldl_setup_error_log_redirection();
 
-        // 設定が変更されたことを確認
+        // 設定後のerror_logパスを確認
         $new_error_log = ini_get('error_log');
-        $this->assertNotEquals($original_error_log, $new_error_log);
         $this->assertStringContainsString('logs/debug.log', $new_error_log);
+
+        // ldl_get_log_path() と一致することを確認
+        $expected_path = ldl_get_log_path();
+        $this->assertEquals($expected_path, $new_error_log);
     }
 
     /**

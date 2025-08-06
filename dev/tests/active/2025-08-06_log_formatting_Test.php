@@ -12,6 +12,9 @@ class LogFormatting_Test extends PHPUnit\Framework\TestCase
     protected function setUp(): void
     {
         WP_Mock::setUp();
+
+        // メインプラグインファイルを読み込み
+        require_once dirname(__DIR__, 3) . '/localize-debug-log/localize-debug-log.php';
     }
 
     protected function tearDown(): void
@@ -48,18 +51,26 @@ class LogFormatting_Test extends PHPUnit\Framework\TestCase
         $sample_log_line = '[06-Aug-2025 06:30:45 UTC] test message';
         $timezone = 'Asia/Tokyo';
 
-        // TODO: ldl_format_log_with_local_time() 実装後にコメントアウト解除
-        /*
-        $formatted = ldl_format_log_with_local_time($sample_log_line, $timezone);
+        $sample_log_lines = [
+            '[06-Aug-2025 06:30:45 UTC] test message 1',
+            '[07-Aug-2025 07:15:30 UTC] test message 2',
+            'No timestamp message'
+        ];
 
-        // 期待される出力形式: JST 2025/08/06 15:30:45 | [06-Aug-2025 06:30:45 UTC] test message
-        $this->assertStringStartsWith('JST 2025/08/06 15:30:45 |', $formatted);
-        $this->assertStringContains('[06-Aug-2025 06:30:45 UTC]', $formatted);
-        $this->assertStringContains('test message', $formatted);
-        */
+        $result = ldl_format_log_with_local_time($sample_log_lines, $timezone);
 
-        // 仮のテスト（実装完了まで）
-        $this->assertTrue(true, 'ローカル時刻追加テスト準備完了');
+        $this->assertIsArray($result);
+        $this->assertCount(3, $result);
+
+        // 最初の行にローカル時刻が付加されることを確認
+        $this->assertStringContainsString('JST 2025/08/06 15:30:45', $result[0]);
+        $this->assertStringContainsString('[06-Aug-2025 06:30:45 UTC] test message 1', $result[0]);
+
+        // 2番目の行も確認
+        $this->assertStringContainsString('JST 2025/08/07 16:15:30', $result[1]);
+
+        // タイムスタンプがない行はそのまま保持されることを確認
+        $this->assertEquals('No timestamp message', $result[2]);
     }
 
     /**
@@ -67,23 +78,20 @@ class LogFormatting_Test extends PHPUnit\Framework\TestCase
      */
     public function test_read_log_file()
     {
-        // TODO: ldl_read_log_file() 実装後にコメントアウト解除
-        /*
         // テスト用の一時ファイル作成
         $temp_file = tempnam(sys_get_temp_dir(), 'ldl_test_');
-        $test_content = "[06-Aug-2025 06:30:45 UTC] Test log entry\n";
+        $test_content = "[06-Aug-2025 06:30:45 UTC] Test log entry 1\n[07-Aug-2025 07:30:45 UTC] Test log entry 2\n\n";
         file_put_contents($temp_file, $test_content);
 
         // ファイル読み込みテスト
-        $content = ldl_read_log_file($temp_file);
-        $this->assertEquals($test_content, $content);
+        $lines = ldl_read_log_file($temp_file);
+        $this->assertIsArray($lines);
+        $this->assertCount(2, $lines); // 空行は除去されるので2行
+        $this->assertEquals('[06-Aug-2025 06:30:45 UTC] Test log entry 1', $lines[0]);
+        $this->assertEquals('[07-Aug-2025 07:30:45 UTC] Test log entry 2', $lines[1]);
 
         // クリーンアップ
         unlink($temp_file);
-        */
-
-        // 仮のテスト（実装完了まで）
-        $this->assertTrue(true, 'ログファイル読み込みテスト準備完了');
     }
 
     /**
@@ -91,17 +99,12 @@ class LogFormatting_Test extends PHPUnit\Framework\TestCase
      */
     public function test_read_log_file_not_exists()
     {
-        // TODO: ldl_read_log_file() 実装後にコメントアウト解除
-        /*
         $non_existent_file = '/path/to/non_existent_file.log';
         $result = ldl_read_log_file($non_existent_file);
 
-        // 空結果を返すことを確認（エラーではなく）
-        $this->assertEquals('', $result);
-        */
-
-        // 仮のテスト（実装完了まで）
-        $this->assertTrue(true, 'ファイル不存在時のエラー処理テスト準備完了');
+        // 空配列を返すことを確認（エラーではなく）
+        $this->assertIsArray($result);
+        $this->assertEmpty($result);
     }
 
     /**
@@ -109,18 +112,18 @@ class LogFormatting_Test extends PHPUnit\Framework\TestCase
      */
     public function test_utc_timestamp_extraction()
     {
-        $pattern = '/\[(\d{2}-\w{3}-\d{4} \d{2}:\d{2}:\d{2}) UTC\]/';
+        // ldl_extract_utc_timestamp() 関数のテスト
+        $test_patterns = [
+            '[06-Aug-2025 15:30:45 UTC] PHP Notice: Test message' => '06-Aug-2025 15:30:45',
+            '[25-Dec-2024 23:59:59 UTC] PHP Warning: Another test' => '25-Dec-2024 23:59:59',
+            'Invalid log format without timestamp' => null,
+            '[Invalid-Format] message' => null,
+            '[2025-08-06 06:30:45] test message' => null  // 不正なフォーマット
+        ];
 
-        // 正常なパターン
-        $valid_log = '[06-Aug-2025 06:30:45 UTC] test message';
-        $this->assertEquals(1, preg_match($pattern, $valid_log, $matches));
-        $this->assertEquals('06-Aug-2025 06:30:45', $matches[1]);
-
-        // 不正なパターン
-        $invalid_log = '[2025-08-06 06:30:45] test message';
-        $this->assertEquals(0, preg_match($pattern, $invalid_log));
-
-        // 仮のテスト（実装完了まで）
-        $this->assertTrue(true, 'UTC タイムスタンプ抽出の正規表現テスト準備完了');
+        foreach ($test_patterns as $input => $expected) {
+            $result = ldl_extract_utc_timestamp($input);
+            $this->assertEquals($expected, $result, "Failed for input: $input");
+        }
     }
 }
