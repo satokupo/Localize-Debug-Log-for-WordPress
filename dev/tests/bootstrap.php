@@ -103,3 +103,18 @@ if (!function_exists('get_stylesheet_directory_uri')) {
 		return 'http://localhost/wp-content/themes/swell_child';
 	}
 }
+
+/**
+ * プラグインディレクトリパス取得関数のモック
+ *
+ * @param string $file プラグインファイルのパス
+ * @return string プラグインディレクトリの絶対パス
+ */
+if (!function_exists('plugin_dir_path')) {
+	function plugin_dir_path($file) {
+		// テスト環境では固定パスを返す
+		return '/test/path/to/plugin/';
+	}
+}
+
+

@@ -98,3 +98,69 @@ function ldl_format_local_timestamp($utc_timestamp, $timezone) {
         return '';
     }
 }
+
+/**
+ * =============================================================================
+ * ログ出力先変更機能
+ * =============================================================================
+ */
+
+/**
+ * ログファイルのパスを取得
+ *
+ * @return string ログファイルの絶対パス
+ */
+function ldl_get_log_path() {
+    return plugin_dir_path(__FILE__) . 'logs/debug.log';
+}
+
+/**
+ * ログディレクトリの存在確認と作成
+ *
+ * @return bool 作成成功またはすでに存在する場合はtrue
+ */
+function ldl_ensure_log_directory() {
+    $log_dir = plugin_dir_path(__FILE__) . 'logs';
+
+    if (!file_exists($log_dir)) {
+        return wp_mkdir_p($log_dir);
+    }
+
+    return true;
+}
+
+/**
+ * error_log出力先をプラグインのlogディレクトリに設定
+ */
+function ldl_setup_error_log_redirection() {
+    // ディレクトリ確保
+    ldl_ensure_log_directory();
+
+    // ini_set で error_log 出力先を変更
+    $log_path = ldl_get_log_path();
+    ini_set('error_log', $log_path);
+}
+
+/**
+ * debug_log_path フィルタでWordPressコアのログ出力先を変更
+ *
+ * @param string $original_path 元のログパス
+ * @return string 変更後のログパス
+ */
+function ldl_override_debug_log_path($original_path) {
+    return ldl_get_log_path();
+}
+
+/**
+ * プラグイン初期化処理
+ */
+function ldl_init() {
+    // ログ出力先変更を即座に実行
+    ldl_setup_error_log_redirection();
+
+    // WordPressコアのdebug_log_pathもフィルタで変更
+    add_filter('debug_log_path', 'ldl_override_debug_log_path');
+}
+
+// プラグイン読み込み時にフック登録
+add_action('plugins_loaded', 'ldl_init', 0);

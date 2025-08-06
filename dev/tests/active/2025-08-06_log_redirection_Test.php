@@ -12,6 +12,9 @@ class LogRedirection_Test extends PHPUnit\Framework\TestCase
     protected function setUp(): void
     {
         WP_Mock::setUp();
+
+        // メインプラグインファイルを読み込み
+        require_once dirname(__DIR__, 3) . '/localize-debug-log/localize-debug-log.php';
     }
 
     protected function tearDown(): void
@@ -24,15 +27,12 @@ class LogRedirection_Test extends PHPUnit\Framework\TestCase
      */
     public function test_get_log_path_returns_correct_path()
     {
-        // TODO: ldl_get_log_path() 実装後にコメントアウト解除
-        /*
-        $expected_path = plugin_dir_path(__FILE__) . 'logs/debug.log';
-        $actual_path = ldl_get_log_path();
-        $this->assertEquals($expected_path, $actual_path);
-        */
+        // plugin_dir_path() のモック（テスト環境用）
+        $test_plugin_path = '/test/path/to/plugin/';
 
-        // 仮のテスト（実装完了まで）
-        $this->assertTrue(true, 'ログパス取得テスト準備完了');
+        // ldl_get_log_path() の動作確認
+        $actual_path = ldl_get_log_path();
+        $this->assertStringEndsWith('logs/debug.log', $actual_path);
     }
 
     /**
@@ -40,20 +40,15 @@ class LogRedirection_Test extends PHPUnit\Framework\TestCase
      */
     public function test_ensure_log_directory_creates_directory()
     {
-        // wp_mkdir_p() 関数のモック（実装後に有効化）
-        // WP_Mock::userFunction('wp_mkdir_p')
-        //     ->with(\Mockery::type('string'))
-        //     ->once()
-        //     ->andReturn(true);
+        // file_exists() は PHP 標準関数なので実際に動作し、ディレクトリが存在しない場合のテスト
+        // wp_mkdir_p() 関数のモック
+        WP_Mock::userFunction('wp_mkdir_p')
+            ->with(\Mockery::type('string'))
+            ->once()
+            ->andReturn(true);
 
-        // TODO: ldl_ensure_log_directory() 実装後にコメントアウト解除
-        /*
         $result = ldl_ensure_log_directory();
         $this->assertTrue($result);
-        */
-
-        // 仮のテスト（実装完了まで）
-        $this->assertTrue(true, 'ディレクトリ作成テスト準備完了');
     }
 
     /**
@@ -61,9 +56,7 @@ class LogRedirection_Test extends PHPUnit\Framework\TestCase
      */
     public function test_setup_error_log_redirection()
     {
-        // TODO: ldl_setup_error_log_redirection() 実装後にコメントアウト解除
-        /*
-        // 関数実行前の状態取得
+                // 関数実行前の状態取得
         $original_error_log = ini_get('error_log');
 
         // 関数実行
@@ -72,11 +65,7 @@ class LogRedirection_Test extends PHPUnit\Framework\TestCase
         // 設定が変更されたことを確認
         $new_error_log = ini_get('error_log');
         $this->assertNotEquals($original_error_log, $new_error_log);
-        $this->assertStringContains('logs/debug.log', $new_error_log);
-        */
-
-        // 仮のテスト（実装完了まで）
-        $this->assertTrue(true, 'error_log設定変更テスト準備完了');
+        $this->assertStringContainsString('logs/debug.log', $new_error_log);
     }
 
     /**
@@ -84,17 +73,11 @@ class LogRedirection_Test extends PHPUnit\Framework\TestCase
      */
     public function test_override_debug_log_path_filter()
     {
-        // TODO: ldl_override_debug_log_path() 実装後にコメントアウト解除
-        /*
-        $original_path = '/var/log/debug.log';
+                $original_path = '/var/log/debug.log';
         $filtered_path = ldl_override_debug_log_path($original_path);
 
         $this->assertNotEquals($original_path, $filtered_path);
-        $this->assertStringContains('logs/debug.log', $filtered_path);
-        */
-
-        // 仮のテスト（実装完了まで）
-        $this->assertTrue(true, 'debug_log_pathフィルタテスト準備完了');
+        $this->assertStringContainsString('logs/debug.log', $filtered_path);
     }
 
     /**
@@ -102,16 +85,16 @@ class LogRedirection_Test extends PHPUnit\Framework\TestCase
      */
     public function test_plugin_initialization()
     {
-        // plugins_loaded フックのモック（実装後に有効化）
-        // WP_Mock::expectActionAdded('plugins_loaded', 'ldl_init', 0);
+        // ldl_init関数が存在することを確認
+        $this->assertTrue(function_exists('ldl_init'));
 
-        // TODO: プラグイン初期化処理実装後にコメントアウト解除
-        /*
-        // メインプラグインファイルを読み込んでフック登録を確認
-        ldl_register_hooks();
-        */
+        // ldl_init関数が呼び出し可能であることを確認
+        $this->assertTrue(is_callable('ldl_init'));
 
-        // 仮のテスト（実装完了まで）
-        $this->assertTrue(true, 'プラグイン初期化テスト準備完了');
+        // bootstrap.phpでadd_filterが実装されているので、実際に実行しても問題なし
+        ldl_init();
+
+        // 実行後のテスト（エラーが発生しないことを確認）
+        $this->assertTrue(true, 'ldl_init関数が正常実行された');
     }
 }
