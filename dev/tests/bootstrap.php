@@ -46,6 +46,15 @@ if (!function_exists('esc_html')) {
 }
 
 /**
+ * textarea 用エスケープ関数のモック
+ */
+if (!function_exists('esc_textarea')) {
+    function esc_textarea($text) {
+        return htmlspecialchars($text, ENT_QUOTES, 'UTF-8');
+    }
+}
+
+/**
  * WordPress エラークラスのモック
  * catalog.php のエラーハンドリングで使用
  */
