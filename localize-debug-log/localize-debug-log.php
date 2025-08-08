@@ -317,3 +317,62 @@ function ldl_safe_init() {
         return false;
     }
 }
+
+/**
+ * =============================================================================
+ * Phase 3: 管理画面 UI 実装（メニュー／管理バー）
+ * =============================================================================
+ */
+
+/**
+ * 設定メニューに「Localize Debug Log」ページを追加
+ *
+ * WordPress 管理画面の「設定」配下にログ表示ページへの入口を作成する。
+ * ここでは最小実装として `add_options_page()` の呼び出しのみ行い、
+ * コールバック `ldl_render_log_page` は後続の実装で提供する。
+ *
+ * @return void
+ */
+function ldl_add_admin_menu() {
+    add_options_page(
+        'Localize Debug Log',               // page_title
+        'Localize Debug Log',               // menu_title
+        'manage_options',                   // capability（管理者相当）
+        'localize-debug-log',               // menu_slug
+        'ldl_render_log_page'               // callback（後続で実装）
+    );
+}
+
+/**
+ * 管理バー（上部バー）にログ画面へのリンクを追加
+ *
+ * @param object $admin_bar WP_Admin_Bar 互換のオブジェクト
+ * @return void
+ */
+function ldl_add_admin_bar_link($admin_bar) {
+    if (!is_object($admin_bar)) {
+        return;
+    }
+
+    if (method_exists($admin_bar, 'add_node')) {
+        $admin_bar->add_node(array(
+            'id'    => 'ldl-admin-bar-link',
+            'title' => 'Localize Debug Log',
+            'href'  => admin_url('options-general.php?page=localize-debug-log'),
+            'meta'  => array('class' => 'ldl-admin-bar')
+        ));
+    }
+}
+
+/**
+ * 管理画面向けのフック登録
+ *
+ * - admin_menu: 設定メニューにページを追加（優先度10）
+ * - admin_bar_menu: 管理バーにリンクを追加（優先度100, accepted_args=1）
+ *
+ * @return void
+ */
+function ldl_register_admin_ui() {
+    add_action('admin_menu', 'ldl_add_admin_menu', 10, 0);
+    add_action('admin_bar_menu', 'ldl_add_admin_bar_link', 100, 1);
+}
