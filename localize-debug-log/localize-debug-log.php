@@ -310,6 +310,11 @@ function ldl_safe_init() {
         // WordPressコアのdebug_log_pathフィルタを追加
         add_filter('debug_log_path', 'ldl_override_debug_log_path');
 
+        // 管理画面UIのフック登録（管理画面のみ）
+        if (!function_exists('is_admin') || is_admin()) {
+            ldl_register_admin_ui();
+        }
+
         return true;
 
     } catch (Exception $e) {
@@ -357,7 +362,7 @@ function ldl_add_admin_bar_link($admin_bar) {
     if (method_exists($admin_bar, 'add_node')) {
         $admin_bar->add_node(array(
             'id'    => 'ldl-admin-bar-link',
-            'title' => 'Localize Debug Log',
+            'title' => '<span class="dashicons dashicons-admin-settings" style="margin-right:4px;"></span>Localize Debug Log',
             'href'  => admin_url('options-general.php?page=localize-debug-log'),
             'meta'  => array('class' => 'ldl-admin-bar')
         ));
@@ -375,4 +380,155 @@ function ldl_add_admin_bar_link($admin_bar) {
 function ldl_register_admin_ui() {
     add_action('admin_menu', 'ldl_add_admin_menu', 10, 0);
     add_action('admin_bar_menu', 'ldl_add_admin_bar_link', 100, 1);
+    // 削除関連のフック（POST処理と通知）
+    add_action('admin_init', 'ldl_handle_delete_request', 10, 0);
+    add_action('admin_notices', 'ldl_notice_delete_result', 10, 0);
+}
+
+/**
+ * ログ表示ページのレンダリング
+ *
+ * - textarea でログを読み取り専用表示
+ * - 1MB 超のときは警告を表示
+ *
+ * @return void
+ */
+function ldl_render_log_page() {
+    // 権限チェック（管理者のみ）
+    if (!current_user_can('manage_options')) {
+        echo '<div class="notice notice-error"><p>このページにアクセスする権限がありません。</p></div>';
+        return;
+    }
+
+    // ldl_get_formatted_log は内部で get_option を呼ぶため、存在確認してから実行
+    $log_lines = function_exists('ldl_get_formatted_log') ? (array) ldl_get_formatted_log() : array();
+    // 各行を先にHTMLエスケープしてから結合（textarea内の安全性確保）
+    $escaped_lines = array_map(function ($line) {
+        return htmlspecialchars($line, ENT_QUOTES, 'UTF-8');
+    }, $log_lines);
+    $log_text  = implode("\n", $escaped_lines);
+
+    $log_path  = function_exists('ldl_get_log_path') ? ldl_get_log_path() : '';
+    $exists    = ($log_path && file_exists($log_path));
+    $size      = $exists ? filesize($log_path) : 0;
+    $is_large  = ($size !== false && $size > 1024 * 1024); // 1MB
+
+    if ($is_large) {
+        echo '<div class="notice notice-warning"><p>ログファイルが大きいため、表示に時間がかかる場合があります。</p></div>';
+    }
+
+    if (!$exists) {
+        echo '<div class="notice notice-info"><p>ログファイルが見つかりません。新しいエントリが記録されるとここに表示されます。</p></div>';
+    }
+
+    echo '<div class="wrap">';
+    echo '<h1>Localize Debug Log</h1>';
+    // widefat を使用したレイアウト（標準UIクラス）
+    echo '<table class="widefat"><tbody><tr><td>';
+    echo '<textarea readonly rows="20" style="width:100%;">' . $log_text . '</textarea>';
+    echo '</td></tr></tbody></table>';
+    // 削除フォーム（nonce + confirm）
+    echo '<form method="post" style="margin-top:16px;" onsubmit="return confirm(\'本当に削除しますか？この操作は取り消せません。\');">';
+    if (function_exists('wp_nonce_field')) {
+        echo wp_nonce_field('ldl_delete_log_action', 'ldl_delete_nonce');
+    }
+    echo '<input type="hidden" name="ldl_delete_log" value="1" />';
+    echo '<button type="submit" class="button button-secondary">ログを削除</button>';
+    echo '</form>';
+    echo '</div>';
+}
+
+/**
+ * =============================================================================
+ * Phase 3: ログ削除機能（最小実装）
+ * =============================================================================
+ */
+
+/**
+ * ログファイルを削除し、空のファイルを再生成
+ *
+ * @return array { success: bool, message?: string }
+ */
+function ldl_delete_log_file() {
+    try {
+        $log_path = ldl_get_log_path();
+
+        if (file_exists($log_path)) {
+            if (!@unlink($log_path)) {
+                return array('success' => false, 'message' => 'unlink failed');
+            }
+        }
+
+        // 空ファイルを再生成
+        if (file_put_contents($log_path, '') === false) {
+            return array('success' => false, 'message' => 'recreate failed');
+        }
+
+        // サイズ0であることを確認
+        $size = filesize($log_path);
+        if ($size !== 0) {
+            return array('success' => false, 'message' => 'not empty after recreate');
+        }
+
+        return array('success' => true);
+    } catch (Exception $e) {
+        return array('success' => false, 'message' => 'exception');
+    }
+}
+
+// 削除結果を保持（簡易）
+$ldl_last_delete_result = null;
+
+/**
+ * 削除リクエストの処理（POST想定）
+ *
+ * @return void
+ */
+function ldl_handle_delete_request() {
+    global $ldl_last_delete_result;
+    // 前回の結果をクリア
+    $ldl_last_delete_result = null;
+
+    if (empty($_POST['ldl_delete_log'])) {
+        return; // 何もしない
+    }
+
+    // 権限チェック
+    if (function_exists('current_user_can') && !current_user_can('manage_options')) {
+        $ldl_last_delete_result = array('success' => false, 'message' => 'permission');
+        return;
+    }
+
+    // nonce チェック
+    if (function_exists('check_admin_referer')) {
+        $verified = check_admin_referer('ldl_delete_log_action', 'ldl_delete_nonce');
+        if (!$verified) {
+            $ldl_last_delete_result = array('success' => false, 'message' => 'nonce');
+            return;
+        }
+    }
+
+    $ldl_last_delete_result = ldl_delete_log_file();
+}
+
+/**
+ * 削除結果の通知（admin_notices相当のHTMLを出力）
+ *
+ * @return void
+ */
+function ldl_notice_delete_result() {
+    global $ldl_last_delete_result;
+
+    if (!is_array($ldl_last_delete_result)) {
+        return;
+    }
+
+    if (!empty($ldl_last_delete_result['success'])) {
+        echo '<div class="notice notice-success"><p>ログファイルを削除しました。</p></div>';
+    } else {
+        echo '<div class="notice notice-error"><p>ログファイルの削除に失敗しました。</p></div>';
+    }
+
+    // 出力後は結果をクリア（多重出力・次リクエストへの持ち越し防止）
+    $ldl_last_delete_result = null;
 }
