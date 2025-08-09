@@ -12,6 +12,10 @@ node_modules/*
 kamui/
 _temp/
 _temp/*
+.serena/
+.serena/*
+.claude/
+.claude/*
 
 ## 機密ファイル
 env.php
