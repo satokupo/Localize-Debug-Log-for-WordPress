@@ -12,6 +12,12 @@ node_modules/*
 kamui/
 _temp/
 _temp/*
+.serena/
+.serena/*
+.claude/
+.claude/*
+*.cache
+.phpunit.result.cache
 
 ## 機密ファイル
 env.php

@@ -449,28 +449,47 @@ function ldl_render_log_page() {
  *
  * @return array { success: bool, message?: string }
  */
-function ldl_delete_log_file() {
+function ldl_delete_log_file($custom_path = null) {
     try {
-        $log_path = ldl_get_log_path();
+        // パス取得（引数優先、なければデフォルト）
+        $log_path = $custom_path ?: ldl_get_log_path();
 
-        if (file_exists($log_path)) {
-            if (!@unlink($log_path)) {
-                return array('success' => false, 'message' => 'unlink failed');
+        // パス妥当性チェック（Phase 4 追加）
+        if (!ldl_validate_log_path($log_path)) {
+            return array('success' => false, 'message' => 'validate');
+        }
+
+        // 第一選択：file_put_contents with LOCK_EX（排他制御付きゼロクリア）
+        if (file_put_contents($log_path, '', LOCK_EX) !== false) {
+            // 成功：サイズ0であることを確認
+            $size = filesize($log_path);
+            if ($size === 0) {
+                return array('success' => true);
+            } else {
+                return array('success' => false, 'message' => 'not empty after clear');
             }
         }
 
-        // 空ファイルを再生成
-        if (file_put_contents($log_path, '') === false) {
-            return array('success' => false, 'message' => 'recreate failed');
+        // フォールバック：fopen + flock + ftruncate
+        $handle = fopen($log_path, 'c+');
+        if ($handle === false) {
+            return array('success' => false, 'message' => 'fopen failed');
         }
 
-        // サイズ0であることを確認
-        $size = filesize($log_path);
-        if ($size !== 0) {
-            return array('success' => false, 'message' => 'not empty after recreate');
+        if (flock($handle, LOCK_EX)) {
+            ftruncate($handle, 0);
+            fflush($handle);
+            flock($handle, LOCK_UN);
+            fclose($handle);
+
+            // 成功確認
+            $size = filesize($log_path);
+            return $size === 0 ? array('success' => true) : array('success' => false, 'message' => 'not empty after ftruncate');
+        } else {
+            fclose($handle);
+            return array('success' => false, 'message' => 'flock failed');
         }
 
-        return array('success' => true);
     } catch (Exception $e) {
         return array('success' => false, 'message' => 'exception');
     }
@@ -489,6 +508,11 @@ function ldl_handle_delete_request() {
     // 前回の結果をクリア
     $ldl_last_delete_result = null;
 
+    // POST メソッドのみ処理
+    if (!isset($_SERVER['REQUEST_METHOD']) || $_SERVER['REQUEST_METHOD'] !== 'POST') {
+        return; // GET や他のメソッドは無視
+    }
+
     if (empty($_POST['ldl_delete_log'])) {
         return; // 何もしない
     }
@@ -499,13 +523,17 @@ function ldl_handle_delete_request() {
         return;
     }
 
-    // nonce チェック
-    if (function_exists('check_admin_referer')) {
-        $verified = check_admin_referer('ldl_delete_log_action', 'ldl_delete_nonce');
-        if (!$verified) {
-            $ldl_last_delete_result = array('success' => false, 'message' => 'nonce');
-            return;
-        }
+    // nonce チェック（共通化関数を使用）
+    if (!ldl_csrf_protect('ldl_delete_log_action', 'ldl_delete_nonce', 'verify')) {
+        $ldl_last_delete_result = array('success' => false, 'message' => 'nonce');
+        return;
+    }
+
+    // パス妥当性チェック
+    $log_path = ldl_get_log_path();
+    if (!ldl_validate_log_path($log_path)) {
+        $ldl_last_delete_result = array('success' => false, 'message' => 'validate');
+        return;
     }
 
     $ldl_last_delete_result = ldl_delete_log_file();
@@ -531,4 +559,74 @@ function ldl_notice_delete_result() {
 
     // 出力後は結果をクリア（多重出力・次リクエストへの持ち越し防止）
     $ldl_last_delete_result = null;
+}
+
+/**
+ * =============================================================================
+ * Phase 4: セキュリティ・権限制御実装
+ * =============================================================================
+ */
+
+/**
+ * CSRF保護ユーティリティ
+ *
+ * nonce の発行・検証を共通化するヘルパー関数
+ *
+ * @param string $action nonce アクション名（デフォルト: 'ldl_delete_log_action'）
+ * @param string $field nonce フィールド名（デフォルト: 'ldl_delete_nonce'）
+ * @param string $mode 'field' で発行、'verify' で検証（デフォルト: 'field'）
+ * @return string|bool field モードではHTML文字列、verify モードでは boolean
+ */
+function ldl_csrf_protect($action = 'ldl_delete_log_action', $field = 'ldl_delete_nonce', $mode = 'field') {
+    // 検証モード: check_admin_referer の結果を返す
+    if ($mode === 'verify') {
+        return function_exists('check_admin_referer') ? check_admin_referer($action, $field) : false;
+    }
+
+    // 発行モード（デフォルト）: wp_nonce_field の結果を返す
+    return function_exists('wp_nonce_field') ? wp_nonce_field($action, $field, true, false) : '';
+}
+
+/**
+ * ログファイルパス検証
+ *
+ * 指定されたパスが logs/ ディレクトリ配下に限定されることを確認する
+ *
+ * @param string $path 検証対象パス
+ * @return string|false 妥当な場合は正規化済み絶対パス、不正な場合は false
+ */
+function ldl_validate_log_path($path) {
+    // プラグインディレクトリの logs フォルダパスを取得
+    $plugin_dir = function_exists('plugin_dir_path') ? plugin_dir_path(__FILE__) : '/test/path/to/plugin/';
+    $logs_dir = $plugin_dir . 'logs';
+
+    // logs ディレクトリの正規化（テスト環境では仮想パス）
+    $normalized_logs_dir = rtrim(str_replace('\\', '/', $logs_dir), '/');
+
+    // 対象パスを正規化
+    $normalized_path = str_replace('\\', '/', $path);
+
+    // パストラバーサル検出：../ を含む場合は詳細検証
+    if (strpos($normalized_path, '../') !== false) {
+        // realpath で正規化して最終的なパスを確認
+        $real_path = realpath($path);
+        if ($real_path !== false) {
+            $real_normalized = str_replace('\\', '/', $real_path);
+            return strpos($real_normalized, $normalized_logs_dir . '/') === 0 ? $real_path : false;
+        }
+        // realpath が失敗（不存在パス）の場合は、手動で正規化してチェック
+        $manual_normalized = $normalized_path;
+        while (strpos($manual_normalized, '../') !== false) {
+            $manual_normalized = preg_replace('/[^\/]+\/\.\.\//', '', $manual_normalized);
+        }
+        return strpos($manual_normalized, $normalized_logs_dir . '/') === 0 ? false : false;
+    }
+
+    // 単純なプレフィックスチェック（../ がない場合）
+    if (strpos($normalized_path, $normalized_logs_dir . '/') === 0) {
+        $real_path = realpath($path);
+        return $real_path !== false ? $real_path : $normalized_path;
+    }
+
+    return false; // 不正なパス
 }

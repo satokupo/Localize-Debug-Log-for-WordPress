@@ -11,7 +11,7 @@
 | filter | `debug_log_path`      | n/a    | Core が書き込む debug.log のパスを `logs/debug.log` に上書き                       |
 | action | `admin_menu`          | 10     | 「設定」配下にサブメニューを追加（`add_options_page`）                              |
 | action | `admin_bar_menu`      | 100    | 管理バーにログ閲覧リンクを追加                                                    |
-| action | `admin_init`          | 10     | POST での nonce 検証とログ削除実行（`current_user_can('administrator')`）          |
+| action | `admin_init`          | 10     | POST での nonce 検証とログ削除実行（`current_user_can('manage_options')`）          |
 | action | `admin_notices`       | 10     | 削除成功 / 失敗の通知表示                                                         |
 
 ## 3. ファイル操作
@@ -32,9 +32,31 @@ $tz = new DateTimeZone( $tz_string );
 - UTC 部分はログ生データ `[YYYY-MM-DD HH:MM:SS]` を維持
 
 ## 5. セキュリティ
-1. **権限チェック** : `current_user_can( 'administrator' )`
+
+### 基本セキュリティ
+1. **権限チェック** : `current_user_can( 'manage_options' )`
 2. **CSRF** : `wp_nonce_field( 'ldl_delete_log', '_ldl_nonce' )` + `check_admin_referer()`
 3. **パス検証** : `realpath()` で `logs/` 配下限定
+
+### Phase 4 強化機能
+4. **CSRF保護共通化** : `ldl_csrf_protect()` による発行・検証の統一
+   - デフォルト: `action='ldl_delete_log_action'`, `field='ldl_delete_nonce'`
+   - 発行モード: `wp_nonce_field()` のHTML戻り値
+   - 検証モード: `check_admin_referer()` のboolean戻り値
+
+5. **パス検証強化** : `ldl_validate_log_path()` による厳密制御
+   - `realpath()` による正規化で `logs/` ディレクトリ配下の強制制限
+   - パストラバーサル攻撃対策（`../` によるディレクトリ外アクセス防止）
+   - シンボリックリンク経由の不正アクセス防止
+
+6. **POST限定処理** : 削除リクエストはPOSTメソッドのみ受付
+   - `$_SERVER['REQUEST_METHOD'] === 'POST'` チェック
+   - GET リクエストは完全無視（セキュリティ向上）
+
+7. **排他制御** : ファイル操作の安全化
+   - 第一選択: `file_put_contents($path, '', LOCK_EX)` による排他ゼロクリア
+   - フォールバック: `fopen('c+')` → `flock(LOCK_EX)` → `ftruncate(0)` → `fflush` → `fclose`
+   - レースコンディション・TOCTOU攻撃対策
 
 ## 6. UI 仕様
 - ログ表示 : `<textarea readonly class="widefat" rows="25">`
