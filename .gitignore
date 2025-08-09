@@ -16,6 +16,8 @@ _temp/*
 .serena/*
 .claude/
 .claude/*
+*.cache
+.phpunit.result.cache
 
 ## 機密ファイル
 env.php
