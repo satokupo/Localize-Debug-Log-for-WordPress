@@ -20,7 +20,7 @@ core: WordPressプラグイン「Localize Debug Log for WordPress」要件定義
   - 表示場所:
     - サイドメニューに「設定」の下部として項目追加（`dashicons-admin-settings` を使用）
     - 上部の **ヘッダーメニューにも必ずリンクを追加**
-  - アクセス権限: `administrator` 以上のユーザーに限定
+  - アクセス権限: `manage_options` 権限を持つユーザーに限定
   - 表示構成:
     - ログ内容は `<textarea readonly>` を使用して表示し、コピペ可能とする
     - ページ下部に「ログ削除」ボタンを設置（確認付き）

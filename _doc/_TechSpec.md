@@ -11,7 +11,7 @@
 | filter | `debug_log_path`      | n/a    | Core が書き込む debug.log のパスを `logs/debug.log` に上書き                       |
 | action | `admin_menu`          | 10     | 「設定」配下にサブメニューを追加（`add_options_page`）                              |
 | action | `admin_bar_menu`      | 100    | 管理バーにログ閲覧リンクを追加                                                    |
-| action | `admin_init`          | 10     | POST での nonce 検証とログ削除実行（`current_user_can('administrator')`）          |
+| action | `admin_init`          | 10     | POST での nonce 検証とログ削除実行（`current_user_can('manage_options')`）          |
 | action | `admin_notices`       | 10     | 削除成功 / 失敗の通知表示                                                         |
 
 ## 3. ファイル操作
@@ -32,7 +32,7 @@ $tz = new DateTimeZone( $tz_string );
 - UTC 部分はログ生データ `[YYYY-MM-DD HH:MM:SS]` を維持
 
 ## 5. セキュリティ
-1. **権限チェック** : `current_user_can( 'administrator' )`
+1. **権限チェック** : `current_user_can( 'manage_options' )`
 2. **CSRF** : `wp_nonce_field( 'ldl_delete_log', '_ldl_nonce' )` + `check_admin_referer()`
 3. **パス検証** : `realpath()` で `logs/` 配下限定
 
