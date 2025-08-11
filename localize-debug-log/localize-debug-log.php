@@ -393,50 +393,66 @@ function ldl_register_admin_ui() {
 /**
  * ログ表示ページのレンダリング
  *
- * - textarea でログを読み取り専用表示
- * - 1MB 超のときは警告を表示
+ * Phase 3〜6 強化機能：
+ * - 管理者権限チェック（早期リターン）
+ * - HTMLエスケープによるXSS防御
+ * - 大容量ファイル警告（1MB超）
+ * - ファイル不存在時の適切な通知
+ * - CSRF保護された削除フォーム
+ * - WordPress標準UIクラスの使用
  *
- * @return void
+ * @return void HTML出力（void関数）
  */
 function ldl_render_log_page() {
-    // 権限チェック（管理者のみ）
-    if (!current_user_can('manage_options')) {
+    // Step 1: 管理者権限チェック（早期リターンによる安全性確保）
+    $has_admin_permission = current_user_can('manage_options');
+    if (!$has_admin_permission) {
         echo '<div class="notice notice-error"><p>このページにアクセスする権限がありません。</p></div>';
         return;
     }
 
+    // Step 2: ログデータの安全な取得とHTMLエスケープ
     // ldl_get_formatted_log は内部で get_option を呼ぶため、存在確認してから実行
-    $log_lines = function_exists('ldl_get_formatted_log') ? (array) ldl_get_formatted_log() : array();
-    // 各行を先にHTMLエスケープしてから結合（textarea内の安全性確保）
+    $log_lines_raw = function_exists('ldl_get_formatted_log') ? (array) ldl_get_formatted_log() : array();
+
+    // HTMLエスケープ：textarea内でのXSS防御
     $escaped_lines = array_map(function ($line) {
         return htmlspecialchars($line, ENT_QUOTES, 'UTF-8');
-    }, $log_lines);
-    $log_text  = implode("\n", $escaped_lines);
+    }, $log_lines_raw);
+    $log_text_escaped = implode("\n", $escaped_lines);
 
-    $log_path  = function_exists('ldl_get_log_path') ? ldl_get_log_path() : '';
-    $exists    = ($log_path && file_exists($log_path));
-    $size      = $exists ? filesize($log_path) : 0;
-    $is_large  = ($size !== false && $size > 1024 * 1024); // 1MB
+    // Step 3: ログファイルの状態確認（サイズ・存在確認）
+    $log_path = function_exists('ldl_get_log_path') ? ldl_get_log_path() : '';
+    $file_exists = ($log_path && file_exists($log_path));
+    $file_size = $file_exists ? filesize($log_path) : 0;
+    $is_large_file = ($file_size !== false && $file_size > 1024 * 1024); // 1MB閾値
 
-    if ($is_large) {
+    // Step 4: 状態に応じた通知表示
+    if ($is_large_file) {
         echo '<div class="notice notice-warning"><p>ログファイルが大きいため、表示に時間がかかる場合があります。</p></div>';
     }
 
-    if (!$exists) {
+    if (!$file_exists) {
         echo '<div class="notice notice-info"><p>ログファイルが見つかりません。新しいエントリが記録されるとここに表示されます。</p></div>';
     }
 
+    // Step 5: メインUI構造の出力（WordPress標準クラス使用）
     echo '<div class="wrap">';
     echo '<h1>Localize Debug Log</h1>';
-    // widefat を使用したレイアウト（標準UIクラス）
+
+    // ログ表示エリア：widefulatテーブルレイアウト
     echo '<table class="widefat"><tbody><tr><td>';
-    echo '<textarea readonly rows="20" style="width:100%;">' . $log_text . '</textarea>';
+    echo '<textarea readonly rows="20" style="width:100%;">' . $log_text_escaped . '</textarea>';
     echo '</td></tr></tbody></table>';
-    // 削除フォーム（nonce + confirm）
+
+    // Step 6: CSRF保護された削除フォーム
     echo '<form method="post" style="margin-top:16px;" onsubmit="return confirm(\'本当に削除しますか？この操作は取り消せません。\');">';
+
+    // nonce フィールドの条件付き出力
     if (function_exists('wp_nonce_field')) {
         echo wp_nonce_field('ldl_delete_log_action', 'ldl_delete_nonce');
     }
+
     echo '<input type="hidden" name="ldl_delete_log" value="1" />';
     echo '<button type="submit" class="button button-secondary">ログを削除</button>';
     echo '</form>';
@@ -519,41 +535,55 @@ $ldl_last_delete_result = null;
 /**
  * 削除リクエストの処理（POST想定）
  *
- * @return void
+ * Phase 3〜6 強化機能：
+ * - POST限定処理による安全性向上
+ * - 多段階セキュリティチェック（権限・CSRF・パス検証）
+ * - エラー状態のグローバル管理
+ * - 早期リターンによる明確な制御フロー
+ *
+ * @return void グローバル変数 $ldl_last_delete_result に結果を設定
  */
 function ldl_handle_delete_request() {
     global $ldl_last_delete_result;
-    // 前回の結果をクリア
+
+    // Step 1: 前回の結果をクリア（状態の初期化）
     $ldl_last_delete_result = null;
 
-    // POST メソッドのみ処理
-    if (!isset($_SERVER['REQUEST_METHOD']) || $_SERVER['REQUEST_METHOD'] !== 'POST') {
-        return; // GET や他のメソッドは無視
+    // Step 2: HTTPメソッド検証（POST限定）
+    $is_post_request = isset($_SERVER['REQUEST_METHOD']) && $_SERVER['REQUEST_METHOD'] === 'POST';
+    if (!$is_post_request) {
+        return; // GET や他のメソッドは早期リターンで無視
     }
 
-    if (empty($_POST['ldl_delete_log'])) {
-        return; // 何もしない
+    // Step 3: 削除パラメータの存在確認
+    $has_delete_parameter = !empty($_POST['ldl_delete_log']);
+    if (!$has_delete_parameter) {
+        return; // 削除指示がない場合は早期リターン
     }
 
-    // 権限チェック
-    if (function_exists('current_user_can') && !current_user_can('manage_options')) {
+    // Step 4: 管理者権限チェック
+    $has_admin_permission = function_exists('current_user_can') && current_user_can('manage_options');
+    if (!$has_admin_permission) {
         $ldl_last_delete_result = array('success' => false, 'message' => 'permission');
         return;
     }
 
-    // nonce チェック（共通化関数を使用）
-    if (!ldl_csrf_protect('ldl_delete_log_action', 'ldl_delete_nonce', 'verify')) {
+    // Step 5: CSRF保護（nonce検証）
+    $nonce_is_valid = ldl_csrf_protect('ldl_delete_log_action', 'ldl_delete_nonce', 'verify');
+    if (!$nonce_is_valid) {
         $ldl_last_delete_result = array('success' => false, 'message' => 'nonce');
         return;
     }
 
-    // パス妥当性チェック
+    // Step 6: ログファイルパス検証（ディレクトリトラバーサル等の防止）
     $log_path = ldl_get_log_path();
-    if (!ldl_validate_log_path($log_path)) {
+    $path_is_valid = ldl_validate_log_path($log_path);
+    if (!$path_is_valid) {
         $ldl_last_delete_result = array('success' => false, 'message' => 'validate');
         return;
     }
 
+    // Step 7: 実際の削除処理実行
     $ldl_last_delete_result = ldl_delete_log_file();
 }
 
