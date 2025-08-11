@@ -204,6 +204,11 @@ function ldl_read_log_file($log_file_path) {
  * @return string|null UTCタイムスタンプ、抽出できない場合はnull
  */
 function ldl_extract_utc_timestamp($log_line) {
+    // 入力ガード: 非文字列・null は即座に拒否
+    if (!is_string($log_line)) {
+        return null;
+    }
+
     // PHP error_log の標準形式: [DD-MMM-YYYY HH:MM:SS UTC] メッセージ
     $pattern = '/^\[(\d{2}-\w{3}-\d{4} \d{2}:\d{2}:\d{2}) UTC\]/';
 
@@ -596,6 +601,11 @@ function ldl_csrf_protect($action = 'ldl_delete_log_action', $field = 'ldl_delet
  * @return string|false 妥当な場合は正規化済み絶対パス、不正な場合は false
  */
 function ldl_validate_log_path($path) {
+    // 入力ガード: 非文字列・空文字は即座に拒否
+    if (!is_string($path) || $path === '') {
+        return false;
+    }
+
     // プラグインディレクトリの logs フォルダパスを取得
     $plugin_dir = function_exists('plugin_dir_path') ? plugin_dir_path(__FILE__) : '/test/path/to/plugin/';
     $logs_dir = $plugin_dir . 'logs';
@@ -606,7 +616,7 @@ function ldl_validate_log_path($path) {
     // 対象パスを正規化
     $normalized_path = str_replace('\\', '/', $path);
 
-    // パストラバーサル検出：../ を含む場合は詳細検証
+    // パストラバーサル検出：../ を含む場合は安全側で拒否
     if (strpos($normalized_path, '../') !== false) {
         // realpath で正規化して最終的なパスを確認
         $real_path = realpath($path);
@@ -614,12 +624,9 @@ function ldl_validate_log_path($path) {
             $real_normalized = str_replace('\\', '/', $real_path);
             return strpos($real_normalized, $normalized_logs_dir . '/') === 0 ? $real_path : false;
         }
-        // realpath が失敗（不存在パス）の場合は、手動で正規化してチェック
-        $manual_normalized = $normalized_path;
-        while (strpos($manual_normalized, '../') !== false) {
-            $manual_normalized = preg_replace('/[^\/]+\/\.\.\//', '', $manual_normalized);
-        }
-        return strpos($manual_normalized, $normalized_logs_dir . '/') === 0 ? false : false;
+        // realpath が失敗（不存在パス）の場合は安全側で拒否
+        // 無限ループを避けるため手動正規化は行わない
+        return false;
     }
 
     // 単純なプレフィックスチェック（../ がない場合）

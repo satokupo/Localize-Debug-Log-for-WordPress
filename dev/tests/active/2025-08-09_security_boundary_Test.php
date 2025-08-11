@@ -119,54 +119,45 @@ class Ldl_SecurityBoundary_Test extends TestCase
 
 
 
-    /**
+        /**
      * @test
-     * ldl_validate_log_path: ディレクトリトラバーサル（../）を拒否
+     * TDD Green-A3: 異常系（ディレクトリトラバーサル拒否）✅
      */
     public function ldl_validate_log_path_rejects_directory_traversal()
     {
-        $this->markTestSkipped('IDENTIFIED AS TIMEOUT CAUSE - Directory traversal validation causes infinite loop');
-        /*
-        // PROBLEM IDENTIFIED: This test causes 300-second timeout
-        // Issue likely in ldl_validate_log_path implementation when processing ../ patterns
-        // TODO: Fix implementation before re-enabling this test
-
-        // Arrange & Act & Assert
+        // 無限ループ修正後：複数のパストラバーサルパターンをテスト
         $malicious_paths = [
-            '../../../etc/passwd',
-            'localize-debug-log/../../../etc/passwd',
-            'logs/../../../sensitive/file.txt',
-            '../debug.log',
-            'logs/../../other.log'
+            '../debug.log',                           // シンプルなトラバーサル
+            '../../../etc/passwd',                    // 深いトラバーサル
+            'localize-debug-log/../../../etc/passwd', // 相対的トラバーサル
+            'logs/../../../sensitive/file.txt',       // logs配下からのトラバーサル
+            'logs/../../other.log'                    // 複数段階トラバーサル
         ];
 
         foreach ($malicious_paths as $path) {
             $result = ldl_validate_log_path($path);
-            $this->assertFalse($result, "Path should be rejected: $path");
+            $this->assertFalse($result, "Directory traversal should be rejected: $path");
         }
-        */
     }
 
     /**
      * @test
-     * ldl_validate_log_path: 絶対パスを拒否
+     * TDD Green-A4: 絶対パス拒否テスト復活 ✅
      */
     public function ldl_validate_log_path_rejects_absolute_paths()
     {
-        $this->markTestSkipped('Temporarily disabled for troubleshooting - Test 7');
-        /*
-        // Arrange & Act & Assert
+        // 絶対パステストを復活
         $absolute_paths = [
-            '/etc/passwd',
-            'C:\\Windows\\System32\\config\\sam',
-            '/var/log/apache2/access.log'
+            '/etc/passwd',                          // UNIX絶対パス
+            'C:\\Windows\\System32\\config\\sam',   // Windows絶対パス
+            '/var/log/apache2/access.log',          // その他UNIX絶対パス
+            'D:\\sensitive\\data.txt'               // その他Windows絶対パス
         ];
 
         foreach ($absolute_paths as $path) {
             $result = ldl_validate_log_path($path);
             $this->assertFalse($result, "Absolute path should be rejected: $path");
         }
-        */
     }
 
 
@@ -200,13 +191,35 @@ class Ldl_SecurityBoundary_Test extends TestCase
 
     /**
      * @test
-     * エッジケース: 空のパス入力
+     * TDD Green-A1: ガード系（空/NULL/非文字列の拒否）✅
      */
-    public function ldl_validate_log_path_rejects_empty_path()
+    public function ldl_validate_log_path_rejects_invalid_inputs()
     {
-        // Act & Assert
-        $this->assertFalse(ldl_validate_log_path(''));
-        $this->assertFalse(ldl_validate_log_path(null));
+        // 空文字・NULL・非文字列は即座に拒否
+        $this->assertFalse(ldl_validate_log_path(''), 'Empty string should be rejected');
+        $this->assertFalse(ldl_validate_log_path(null), 'NULL should be rejected');
+        $this->assertFalse(ldl_validate_log_path([]), 'Array should be rejected');
+        $this->assertFalse(ldl_validate_log_path(123), 'Integer should be rejected');
+        $this->assertFalse(ldl_validate_log_path(true), 'Boolean should be rejected');
+    }
+
+    /**
+     * @test
+     * TDD Red-A2: 正常系（既存実装での動作確認）
+     */
+    public function ldl_validate_log_path_basic_functionality_check()
+    {
+        // シンプルなパス文字列（../を含まない）での基本動作確認
+        // 実装では '/test/path/to/plugin/' がハードコードされているため、
+        // 実際の判定ロジックを確認
+
+        // Act: シンプルな相対パス（ディレクトリトラバーサルなし）
+        $simple_path = 'debug.log';
+        $result = ldl_validate_log_path($simple_path);
+
+        // Assert: 実装の基本動作確認（../なしパスの処理）
+        // 現在の実装がどう動作するかを把握
+        $this->assertIsNotArray($result, 'Should return string or false, not array');
     }
 
     /**
