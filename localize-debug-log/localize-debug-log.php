@@ -452,21 +452,30 @@ function ldl_render_log_page() {
 /**
  * ログファイルを削除し、空のファイルを再生成
  *
- * @return array { success: bool, message?: string }
+ * Phase 4〜6 強化機能：
+ * - パス検証による不正アクセス防止
+ * - 排他制御による安全なファイル操作
+ * - 多段階フォールバック処理
+ * - 例外安全性（常に配列を返却）
+ *
+ * @param string|null $custom_path カスタムパス（null の場合デフォルトパスを使用）
+ * @return array { success: bool, message?: string } 処理結果（成功時は success: true、失敗時は追加で message）
  */
 function ldl_delete_log_file($custom_path = null) {
     try {
-        // パス取得（引数優先、なければデフォルト）
+        // Step 1: パス取得（引数優先、なければデフォルト）
         $log_path = $custom_path ?: ldl_get_log_path();
 
-        // パス妥当性チェック（Phase 4 追加）
+        // Step 2: パス妥当性チェック（Phase 4 追加）
+        // ディレクトリトラバーサル・絶対パス・不正型を早期拒否
         if (!ldl_validate_log_path($log_path)) {
             return array('success' => false, 'message' => 'validate');
         }
 
-        // 第一選択：file_put_contents with LOCK_EX（排他制御付きゼロクリア）
+        // Step 3: 第一選択：file_put_contents with LOCK_EX（排他制御付きゼロクリア）
+        // TOCTOU攻撃対策として、ファイルの存在確認と操作を同時実行
         if (file_put_contents($log_path, '', LOCK_EX) !== false) {
-            // 成功：サイズ0であることを確認
+            // 成功確認：サイズ0であることを検証
             $size = filesize($log_path);
             if ($size === 0) {
                 return array('success' => true);
@@ -475,27 +484,31 @@ function ldl_delete_log_file($custom_path = null) {
             }
         }
 
-        // フォールバック：fopen + flock + ftruncate
+        // Step 4: フォールバック：fopen + flock + ftruncate
+        // file_put_contents が失敗した場合の安全な代替手段
         $handle = fopen($log_path, 'c+');
         if ($handle === false) {
             return array('success' => false, 'message' => 'fopen failed');
         }
 
+        // 排他ロック取得・ファイル切り詰め・フラッシュ・ロック解除
         if (flock($handle, LOCK_EX)) {
-            ftruncate($handle, 0);
-            fflush($handle);
-            flock($handle, LOCK_UN);
-            fclose($handle);
+            ftruncate($handle, 0);  // ファイルサイズを0に切り詰め
+            fflush($handle);        // バッファの強制書き込み
+            flock($handle, LOCK_UN); // 排他ロック解除
+            fclose($handle);         // ファイルハンドル閉じる
 
-            // 成功確認
+            // 成功確認：最終的なファイルサイズを検証
             $size = filesize($log_path);
             return $size === 0 ? array('success' => true) : array('success' => false, 'message' => 'not empty after ftruncate');
         } else {
+            // ロック取得失敗：ファイルハンドル閉じて失敗を報告
             fclose($handle);
             return array('success' => false, 'message' => 'flock failed');
         }
 
     } catch (Exception $e) {
+        // Step 5: 例外安全性：如何なる例外が発生しても配列を返却
         return array('success' => false, 'message' => 'exception');
     }
 }
