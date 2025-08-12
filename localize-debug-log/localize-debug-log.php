@@ -331,6 +331,9 @@ function ldl_safe_init() {
         // ログ出力先変更を安全に実行
         ldl_setup_error_log_redirection();
 
+        // 追加: ログファイルの既定メッセージを保証（空/不存在の場合）
+        ldl_ensure_default_log_content();
+
         // WordPressコアのdebug_log_pathフィルタを追加
         add_filter('debug_log_path', 'ldl_override_debug_log_path');
 
@@ -352,6 +355,33 @@ function ldl_safe_init() {
         return false;
     }
 }
+/**
+ * ログファイルに既定メッセージを保証
+ *
+ * - ファイルが存在しない、またはサイズ0の場合に案内文を1行書き込む
+ * - テスト環境等でファイル操作が不可の場合は安全に無視
+ *
+ * @return void
+ */
+function ldl_ensure_default_log_content() {
+    try {
+        $path = ldl_get_log_path();
+        if (!is_string($path) || $path === '') {
+            return;
+        }
+        // ファイルが存在しない、またはサイズ0のときのみ書き込む
+        $need_init = !file_exists($path) || (filesize($path) === 0);
+        if ($need_init) {
+            // ディレクトリを念のため確保
+            ldl_ensure_log_directory();
+            @file_put_contents($path, "ログ削除ボタンを押して初期化してください\n", LOCK_EX);
+        }
+    } catch (Exception $e) {
+        // 失敗時は何もしない（安全側）
+        return;
+    }
+}
+
 
 /**
  * =============================================================================
@@ -557,6 +587,13 @@ function ldl_delete_log_file($custom_path = null) {
             // 成功確認：サイズ0であることを検証
             $size = filesize($log_path);
             if ($size === 0) {
+                // 初期化行の自動挿入（UTCタイムスタンプ先頭）
+                $utc = gmdate('d-M-Y H:i:s') . ' UTC';
+                $ymd = function_exists('current_time') ? current_time('Y-m-d') : gmdate('Y-m-d');
+                $user = (function_exists('wp_get_current_user') && is_object(wp_get_current_user()))
+                    ? (wp_get_current_user()->display_name ?: wp_get_current_user()->user_login)
+                    : 'unknown';
+                @file_put_contents($log_path, "[{$utc}] 初期化：{$ymd} {$user}\n", FILE_APPEND | LOCK_EX);
                 return array('success' => true);
             } else {
                 return array('success' => false, 'message' => 'not empty after clear');
@@ -579,7 +616,17 @@ function ldl_delete_log_file($custom_path = null) {
 
             // 成功確認：最終的なファイルサイズを検証
             $size = filesize($log_path);
-            return $size === 0 ? array('success' => true) : array('success' => false, 'message' => 'not empty after ftruncate');
+            if ($size === 0) {
+                // 初期化行の自動挿入（UTCタイムスタンプ先頭）
+                $utc = gmdate('d-M-Y H:i:s') . ' UTC';
+                $ymd = function_exists('current_time') ? current_time('Y-m-d') : gmdate('Y-m-d');
+                $user = (function_exists('wp_get_current_user') && is_object(wp_get_current_user()))
+                    ? (wp_get_current_user()->display_name ?: wp_get_current_user()->user_login)
+                    : 'unknown';
+                @file_put_contents($log_path, "[{$utc}] 初期化：{$ymd} {$user}\n", FILE_APPEND | LOCK_EX);
+                return array('success' => true);
+            }
+            return array('success' => false, 'message' => 'not empty after ftruncate');
         } else {
             // ロック取得失敗：ファイルハンドル閉じて失敗を報告
             fclose($handle);
