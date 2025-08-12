@@ -193,11 +193,12 @@ function ldl_read_log_file($log_file_path) {
     $content = str_replace("\r\n", "\n", $content);
 
     // タイムスタンプ境界による分割（標準形式: [DD-MMM-YYYY HH:MM:SS UTC]）
-    $timestamp_pattern = '/^\[\d{2}-[A-Za-z]{3}-\d{4}\s\d{2}:\d{2}:\d{2}\sUTC\]/m';
+    // 行頭依存を撤廃し、任意位置のタイムスタンプで境界分割
+    $timestamp_anywhere = '/\[\d{2}-[A-Za-z]{3}-\d{4}\s\d{2}:\d{2}:\d{2}\sUTC\]/';
 
-    if (preg_match($timestamp_pattern, $content)) {
+    if (preg_match($timestamp_anywhere, $content)) {
         // 次のエントリ開始直前で区切る（先読み）
-        $entries = preg_split('/(?=' . substr($timestamp_pattern, 1, -2) . ')/m', $content);
+        $entries = preg_split('/(?=\[\d{2}-[A-Za-z]{3}-\d{4}\s\d{2}:\d{2}:\d{2}\sUTC\])/', $content);
         // 空要素や空白のみは除去し、末尾の空白をトリム
         $entries = array_values(array_filter(array_map(function ($e) {
             return rtrim($e);
@@ -408,8 +409,8 @@ function ldl_add_admin_bar_link($admin_bar) {
     if (method_exists($admin_bar, 'add_node')) {
         $admin_bar->add_node(array(
             'id'    => 'ldl-admin-bar-link',
-            // テスト互換: 旧テストが dashicons-admin-settings を期待
-            'title' => '<span class="dashicons dashicons-admin-settings" style="margin-right:4px;"></span>Localize Debug Log',
+            // 文字化け対策: アイコンは疑似要素CSSで描画。タイトルはラベルのみ。
+            'title' => 'Localize Debug Log',
             'href'  => admin_url('tools.php?page=localize-debug-log'),
             'meta'  => array('class' => 'ldl-admin-bar')
         ));
@@ -1064,5 +1065,9 @@ function ldl_format_captured_error($context) {
         $formatted .= "\nStack trace:\n" . $context['trace'];
     }
 
+    // 収集段階で末尾に必ず改行を付与（連結防止）。二重改行は避ける
+    if (substr($formatted, -1) !== "\n") {
+        $formatted .= "\n";
+    }
     return $formatted;
 }
