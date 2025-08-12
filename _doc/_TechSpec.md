@@ -9,7 +9,7 @@
 |--------|-----------------------|--------|-----------------------------------------------------------------------------------|
 | action | `plugins_loaded`      | **0**  | `ini_set()` と `debug_log_path` でログ出力を最速設定                               |
 | filter | `debug_log_path`      | n/a    | Core が書き込む debug.log のパスを `logs/debug.log` に上書き                       |
-| action | `admin_menu`          | 10     | 「設定」配下にサブメニューを追加（`add_options_page`）                              |
+| action | `admin_menu`          | 10     | 「ツール」配下にページを追加（`add_management_page`、未定義環境では `add_options_page` にフォールバック） |
 | action | `admin_bar_menu`      | 100    | 管理バーにログ閲覧リンクを追加                                                    |
 | action | `admin_init`          | 10     | POST での nonce 検証とログ削除実行（`current_user_can('manage_options')`）          |
 | action | `admin_notices`       | 10     | 削除成功 / 失敗の通知表示                                                         |
@@ -62,10 +62,14 @@ $tz = new DateTimeZone( $tz_string );
 - ログ表示 : `<textarea readonly class="widefat" rows="25">`
 - 削除ボタン : `<button class="button button-primary">` + JS `confirm()`
 - スタイル : WP 標準クラスのみ（独自 CSS なし）
+- 表示順トグル : `desc`（新しい→古い、既定） / `asc`（古い→新しい）を設定UIで選択可能（表示時にのみ反映、保存形式は不変）
+- 管理バー : フロント/管理の両方で権限者に表示。タイトルは dashicons クラス（互換のため `dashicons-admin-settings`）を付与しつつ、疑似要素CSSで歯車（`\f111`）を安定表示
+- メニュー : 「ツール」配下に配置（`tools.php?page=localize-debug-log`）
 
 ## 7. 制限事項
 - 非 ASCII / バイナリ行はエスケープされない
 - 1 MB 超のログは読み込み遅延の可能性（MVP では分割読み込みなし）
+ - ログ分割は `[DD-MMM-YYYY HH:MM:SS UTC]` 形式のタイムスタンプを起点に境界分割。非標準フォーマットは改行分割にフォールバック
 
 ## 8. 依存関係
 - 追加ライブラリ・Composer 依存なし
@@ -85,14 +89,14 @@ $tz = new DateTimeZone( $tz_string );
 - `ldl_setup_error_log_redirection()` - error_log出力先変更
 - `ldl_override_debug_log_path()` - debug_log_pathフィルタ
 - `ldl_init()` - プラグイン初期化（レガシー）
-- `ldl_read_log_file()` - ログファイル読み込み
+- `ldl_read_log_file()` - ログファイル読み込み（タイムスタンプ境界分割 + フォールバック改行分割、O(n)）
 - `ldl_extract_utc_timestamp()` - UTCタイムスタンプ抽出
 - `ldl_format_log_with_local_time()` - ローカル時刻付きログ整形
 - `ldl_get_formatted_log()` - 統合ログ取得
 - `ldl_check_wp_debug_compatibility()` - WordPress debug設定互換性確認
 - `ldl_safe_init()` - 安全な初期化処理
 
-### 管理画面UI（Phase 3）
+### 管理画面UI（Phase 3/7）
 - `ldl_add_admin_menu()` - 設定メニュー追加
 - `ldl_add_admin_bar_link()` - 管理バーリンク追加
 - `ldl_register_admin_ui()` - 管理画面フック登録
@@ -101,11 +105,21 @@ $tz = new DateTimeZone( $tz_string );
 - `ldl_handle_delete_request()` - 削除リクエスト処理
 - `ldl_notice_delete_result()` - 削除結果通知
 
-### セキュリティ（Phase 4）
+### セキュリティ（Phase 4/7）
 - `ldl_csrf_protect()` - CSRF保護ユーティリティ
 - `ldl_validate_log_path()` - ログファイルパス検証
+ - `ldl_get_option_bool()` - boolean型 option 安全読み取り
+ - `ldl_handle_settings_save()` - 設定保存（強制キャプチャーモード/表示順）
 
-**総関数数**: 23関数（全て `ldl_` プレフィックス統一）
+### 収集強化（Phase 7）
+- `ldl_register_admin_bar_ui()` - フロント側でも管理バーを登録、dashicons読み込み
+- `ldl_enqueue_frontend_dashicons()` - フロントでdashiconsを読み込み
+- `ldl_enqueue_adminbar_icon_style()` - 疑似要素CSSで歯車アイコンを安定表示
+- `ldl_register_force_capture_handlers()` - 強制キャプチャーハンドラ登録（ON時のみ）
+- `ldl_force_error_handler()` / `ldl_force_exception_handler()` / `ldl_force_shutdown_handler()` - 収集ハンドラ群（既存ハンドラへ委譲）
+- `ldl_format_captured_error()` - 収集メッセージ整形（UTCタイムスタンプ付与、スタックトレースは多行）
+
+**総関数数**: 30関数（全て `ldl_` プレフィックス統一）
 
 ## 10. AI開発時の注意事項
 
