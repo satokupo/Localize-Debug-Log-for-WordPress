@@ -74,6 +74,39 @@ $tz = new DateTimeZone( $tz_string );
 - 関数プレフィックス : `ldl_`
 - 名前空間は未使用（単一ファイル構成のため）
 
+## 9-1. 実装関数一覧（Phase 1-6完了時点）
+
+### コア機能（Phase 2）
+- `ldl_get_wordpress_timezone()` - WordPressタイムゾーン設定取得
+- `ldl_convert_utc_to_local()` - UTC→ローカル時刻変換
+- `ldl_format_local_timestamp()` - ローカル時刻フォーマット
+- `ldl_get_log_path()` - ログファイルパス取得
+- `ldl_ensure_log_directory()` - ログディレクトリ確保
+- `ldl_setup_error_log_redirection()` - error_log出力先変更
+- `ldl_override_debug_log_path()` - debug_log_pathフィルタ
+- `ldl_init()` - プラグイン初期化（レガシー）
+- `ldl_read_log_file()` - ログファイル読み込み
+- `ldl_extract_utc_timestamp()` - UTCタイムスタンプ抽出
+- `ldl_format_log_with_local_time()` - ローカル時刻付きログ整形
+- `ldl_get_formatted_log()` - 統合ログ取得
+- `ldl_check_wp_debug_compatibility()` - WordPress debug設定互換性確認
+- `ldl_safe_init()` - 安全な初期化処理
+
+### 管理画面UI（Phase 3）
+- `ldl_add_admin_menu()` - 設定メニュー追加
+- `ldl_add_admin_bar_link()` - 管理バーリンク追加
+- `ldl_register_admin_ui()` - 管理画面フック登録
+- `ldl_render_log_page()` - ログ表示ページレンダリング
+- `ldl_delete_log_file()` - ログファイル削除
+- `ldl_handle_delete_request()` - 削除リクエスト処理
+- `ldl_notice_delete_result()` - 削除結果通知
+
+### セキュリティ（Phase 4）
+- `ldl_csrf_protect()` - CSRF保護ユーティリティ
+- `ldl_validate_log_path()` - ログファイルパス検証
+
+**総関数数**: 23関数（全て `ldl_` プレフィックス統一）
+
 ## 10. AI開発時の注意事項
 
 ### Phase境界の厳守
