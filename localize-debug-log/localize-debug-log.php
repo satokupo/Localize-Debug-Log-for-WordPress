@@ -320,6 +320,12 @@ function ldl_safe_init() {
             ldl_register_admin_ui();
         }
 
+        // Phase 7: 管理バーはフロントでも登録（権限チェックは関数内で実施）
+        ldl_register_admin_bar_ui();
+
+        // Phase 7: 強制キャプチャーハンドラの登録（設定がONの場合のみ）
+        ldl_register_force_capture_handlers();
+
         return true;
 
     } catch (Exception $e) {
@@ -364,10 +370,15 @@ function ldl_add_admin_bar_link($admin_bar) {
         return;
     }
 
+    // Phase 7: 権限チェック（管理画面・フロント両方で表示するが権限者限定）
+    if (!current_user_can('manage_options')) {
+        return;
+    }
+
     if (method_exists($admin_bar, 'add_node')) {
         $admin_bar->add_node(array(
             'id'    => 'ldl-admin-bar-link',
-            'title' => '<span class="dashicons dashicons-admin-settings" style="margin-right:4px;"></span>Localize Debug Log',
+            'title' => '<span class="dashicons dashicons-admin-generic" style="margin-right:4px;"></span>Localize Debug Log',
             'href'  => admin_url('options-general.php?page=localize-debug-log'),
             'meta'  => array('class' => 'ldl-admin-bar')
         ));
@@ -384,10 +395,12 @@ function ldl_add_admin_bar_link($admin_bar) {
  */
 function ldl_register_admin_ui() {
     add_action('admin_menu', 'ldl_add_admin_menu', 10, 0);
-    add_action('admin_bar_menu', 'ldl_add_admin_bar_link', 100, 1);
+    // Phase 7: 管理バーは別関数で登録（フロント対応のため）
     // 削除関連のフック（POST処理と通知）
     add_action('admin_init', 'ldl_handle_delete_request', 10, 0);
     add_action('admin_notices', 'ldl_notice_delete_result', 10, 0);
+    // Phase 7: 設定保存のフック
+    add_action('admin_init', 'ldl_handle_settings_save', 5, 0);
 }
 
 /**
@@ -415,6 +428,12 @@ function ldl_render_log_page() {
     // ldl_get_formatted_log は内部で get_option を呼ぶため、存在確認してから実行
     $log_lines_raw = function_exists('ldl_get_formatted_log') ? (array) ldl_get_formatted_log() : array();
 
+    // Phase 7: ログ表示順の反映
+    $log_order = get_option('ldl_log_order', 'desc');
+    if ($log_order === 'asc') {
+        $log_lines_raw = array_reverse($log_lines_raw);
+    }
+
     // HTMLエスケープ：textarea内でのXSS防御
     $escaped_lines = array_map(function ($line) {
         return htmlspecialchars($line, ENT_QUOTES, 'UTF-8');
@@ -439,6 +458,9 @@ function ldl_render_log_page() {
     // Step 5: メインUI構造の出力（WordPress標準クラス使用）
     echo '<div class="wrap">';
     echo '<h1>Localize Debug Log</h1>';
+
+    // Phase 7: 設定UIブロック（強制キャプチャー・表示順トグル）
+    ldl_render_settings_ui();
 
     // ログ表示エリア：widefulatテーブルレイアウト
     echo '<table class="widefat"><tbody><tr><td>';
@@ -679,4 +701,308 @@ function ldl_validate_log_path($path) {
     }
 
     return false; // 不正なパス
+}
+
+/**
+ * =============================================================================
+ * Phase 7: 収集強化・UI拡張（追加フェーズ）
+ * =============================================================================
+ */
+
+/**
+ * boolean型optionの安全な読み取りユーティリティ
+ *
+ * WordPress optionから値を取得し、boolean値として安全に変換する
+ *
+ * @param string $key option名
+ * @param bool $default デフォルト値
+ * @return bool 取得したboolean値
+ */
+function ldl_get_option_bool($key, $default = false) {
+    $value = get_option($key, $default);
+
+    // 既にbooleanの場合はそのまま返す
+    if (is_bool($value)) {
+        return $value;
+    }
+
+    // 文字列の'1'、'true'、'on'はtrueとして扱う
+    if (is_string($value)) {
+        $value = strtolower(trim($value));
+        if (in_array($value, array('1', 'true', 'on', 'yes'), true)) {
+            return true;
+        }
+        if (in_array($value, array('0', 'false', 'off', 'no', ''), true)) {
+            return false;
+        }
+    }
+
+    // 数値の1はtrue、0はfalse
+    if (is_numeric($value)) {
+        return (bool) intval($value);
+    }
+
+    // その他の値は安全にデフォルト値を返す
+    return $default;
+}
+
+/**
+ * 設定保存処理（POST想定）
+ *
+ * nonce付きPOSTで強制キャプチャーモード等の設定を更新する
+ *
+ * @return bool 保存成功時true、失敗時false
+ */
+function ldl_handle_settings_save() {
+    // POSTリクエストでない場合は早期リターン
+    if (!isset($_SERVER['REQUEST_METHOD']) || $_SERVER['REQUEST_METHOD'] !== 'POST') {
+        return false;
+    }
+
+    // 設定保存パラメータがない場合は早期リターン
+    if (empty($_POST['ldl_save_settings'])) {
+        return false;
+    }
+
+    // 権限チェック
+    if (!current_user_can('manage_options')) {
+        return false;
+    }
+
+    // nonce検証
+    if (!check_admin_referer('ldl_save_settings_action', 'ldl_settings_nonce')) {
+        return false;
+    }
+
+    // 強制キャプチャーモードの保存
+    $force_capture = !empty($_POST['ldl_force_capture']);
+    update_option('ldl_force_capture', $force_capture);
+
+    // ログ表示順の保存
+    $log_order = !empty($_POST['ldl_log_order']) && $_POST['ldl_log_order'] === 'asc' ? 'asc' : 'desc';
+    update_option('ldl_log_order', $log_order);
+
+    return true;
+}
+
+/**
+ * 設定UIブロックのレンダリング
+ *
+ * 強制キャプチャーモードとログ表示順のトグルUIを出力
+ *
+ * @return void HTML出力（void関数）
+ */
+function ldl_render_settings_ui() {
+    // 現在の設定値取得
+    $force_capture = ldl_get_option_bool('ldl_force_capture', false);
+    $log_order = get_option('ldl_log_order', 'desc');
+
+    echo '<div style="background:#f9f9f9; padding:16px; margin:16px 0; border:1px solid #ddd;">';
+    echo '<h3>設定</h3>';
+
+    // 設定フォーム開始
+    echo '<form method="post" style="margin:0;">';
+
+    // nonce フィールド
+    if (function_exists('wp_nonce_field')) {
+        echo wp_nonce_field('ldl_save_settings_action', 'ldl_settings_nonce', true, false);
+    }
+
+    // 強制キャプチャーモード トグル
+    echo '<div style="margin-bottom:16px;">';
+    echo '<label>';
+    echo '<input type="checkbox" name="ldl_force_capture" value="1"' . checked($force_capture, true, false) . '>';
+    echo ' <strong>強制キャプチャーモード</strong>';
+    echo '</label>';
+    echo '<p style="margin:8px 0 0 24px; color:#666; font-size:13px;">';
+    echo 'WP_DEBUG=false でも警告・注意・例外・致命的エラーをログに記録します。<br>';
+    echo '効果: より多くのエラー情報を収集できます。<br>';
+    echo '注意: 他のプラグインのエラーハンドラに影響する可能性があります。';
+    echo '</p>';
+    echo '</div>';
+
+    // ログ表示順 トグル
+    echo '<div style="margin-bottom:16px;">';
+    echo '<label><strong>ログ表示順:</strong></label><br>';
+    echo '<label style="margin-right:16px;">';
+    echo '<input type="radio" name="ldl_log_order" value="desc"' . checked($log_order, 'desc', false) . '>';
+    echo ' 新しい → 古い (既定)';
+    echo '</label>';
+    echo '<label>';
+    echo '<input type="radio" name="ldl_log_order" value="asc"' . checked($log_order, 'asc', false) . '>';
+    echo ' 古い → 新しい';
+    echo '</label>';
+    echo '</div>';
+
+    // 保存ボタン
+    echo '<input type="hidden" name="ldl_save_settings" value="1">';
+    echo '<button type="submit" class="button button-primary">設定を保存</button>';
+
+    echo '</form>';
+    echo '</div>';
+}
+
+/**
+ * 管理バー向けのフック登録（フロント・管理画面共通）
+ *
+ * Phase 7: 管理バーはフロント側でも表示するため、別関数で登録
+ *
+ * @return void
+ */
+function ldl_register_admin_bar_ui() {
+    add_action('admin_bar_menu', 'ldl_add_admin_bar_link', 100, 1);
+
+    // Phase 7: dashiconsをフロント側でも読み込み（管理バーで使用するため）
+    add_action('wp_enqueue_scripts', 'ldl_enqueue_frontend_dashicons');
+}
+
+/**
+ * フロント側でdashiconsを読み込み
+ *
+ * Phase 7: 管理バーでdashicons-admin-genericを使用するため
+ *
+ * @return void
+ */
+function ldl_enqueue_frontend_dashicons() {
+    // 管理バーが表示される場合のみ読み込み
+    if (is_admin_bar_showing() && current_user_can('manage_options')) {
+        wp_enqueue_style('dashicons');
+    }
+}
+
+/**
+ * =============================================================================
+ * Phase 7: 強制キャプチャーモード（動作実装）
+ * =============================================================================
+ */
+
+/**
+ * 強制キャプチャーハンドラの登録
+ *
+ * 強制キャプチャーモードがONの時のみ実行される
+ * 既存ハンドラとのチェーン対応を行う
+ *
+ * @return void
+ */
+function ldl_register_force_capture_handlers() {
+    // 強制キャプチャーモードがOFFの場合は何もしない
+    if (!ldl_get_option_bool('ldl_force_capture', false)) {
+        return;
+    }
+
+    // PHP設定を強化
+    ini_set('log_errors', '1');
+    ini_set('error_log', ldl_get_log_path());
+
+    // error_reportingの設定（LDL_FORCE_REPORTING定数がtrueの場合のみ）
+    if (defined('LDL_FORCE_REPORTING') && LDL_FORCE_REPORTING) {
+        error_reporting(E_ALL);
+    }
+
+    // 既存ハンドラを保存してからカスタムハンドラを設定
+    $GLOBALS['ldl_previous_error_handler'] = set_error_handler('ldl_force_error_handler');
+    $GLOBALS['ldl_previous_exception_handler'] = set_exception_handler('ldl_force_exception_handler');
+
+    // shutdown関数は追加のみ（既存を置き換えない）
+    register_shutdown_function('ldl_force_shutdown_handler');
+}
+
+/**
+ * 強制キャプチャー用エラーハンドラ
+ *
+ * @param int $errno エラーレベル
+ * @param string $errstr エラーメッセージ
+ * @param string $errfile エラーファイル
+ * @param int $errline エラー行
+ * @return bool true（エラー処理完了）
+ */
+function ldl_force_error_handler($errno, $errstr, $errfile = '', $errline = 0) {
+    // ログに記録
+    $formatted_error = ldl_format_captured_error(array(
+        'type' => 'error',
+        'errno' => $errno,
+        'message' => $errstr,
+        'file' => $errfile,
+        'line' => $errline
+    ));
+
+    error_log($formatted_error, 3, ldl_get_log_path());
+
+    // 既存ハンドラに委譲
+    if (!empty($GLOBALS['ldl_previous_error_handler']) && is_callable($GLOBALS['ldl_previous_error_handler'])) {
+        return call_user_func($GLOBALS['ldl_previous_error_handler'], $errno, $errstr, $errfile, $errline);
+    }
+
+    return true; // エラー処理完了
+}
+
+/**
+ * 強制キャプチャー用例外ハンドラ
+ *
+ * @param Throwable $exception 例外オブジェクト
+ * @return void
+ */
+function ldl_force_exception_handler($exception) {
+    // ログに記録
+    $formatted_error = ldl_format_captured_error(array(
+        'type' => 'exception',
+        'message' => $exception->getMessage(),
+        'file' => $exception->getFile(),
+        'line' => $exception->getLine(),
+        'trace' => $exception->getTraceAsString()
+    ));
+
+    error_log($formatted_error, 3, ldl_get_log_path());
+
+    // 既存ハンドラに委譲
+    if (!empty($GLOBALS['ldl_previous_exception_handler']) && is_callable($GLOBALS['ldl_previous_exception_handler'])) {
+        call_user_func($GLOBALS['ldl_previous_exception_handler'], $exception);
+    }
+}
+
+/**
+ * 強制キャプチャー用shutdown関数
+ *
+ * 致命的エラーを error_get_last() から取得して記録
+ *
+ * @return void
+ */
+function ldl_force_shutdown_handler() {
+    $error = error_get_last();
+
+    // 致命的エラーの場合のみ記録
+    if ($error && in_array($error['type'], array(E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR))) {
+        $formatted_error = ldl_format_captured_error(array(
+            'type' => 'fatal',
+            'errno' => $error['type'],
+            'message' => $error['message'],
+            'file' => $error['file'],
+            'line' => $error['line']
+        ));
+
+        error_log($formatted_error, 3, ldl_get_log_path());
+    }
+}
+
+/**
+ * キャプチャーしたエラーの整形
+ *
+ * @param array $context エラー情報の配列
+ * @return string 整形済みエラーメッセージ
+ */
+function ldl_format_captured_error($context) {
+    $timestamp = gmdate('d-M-Y H:i:s') . ' UTC';
+    $type = isset($context['type']) ? strtoupper($context['type']) : 'UNKNOWN';
+    $message = isset($context['message']) ? $context['message'] : 'No message';
+    $file = isset($context['file']) ? basename($context['file']) : 'unknown';
+    $line = isset($context['line']) ? $context['line'] : 0;
+
+    $formatted = "[{$timestamp}] PHP {$type}: {$message} in {$file} on line {$line}";
+
+    // トレース情報があれば追加
+    if (!empty($context['trace'])) {
+        $formatted .= "\nStack trace:\n" . $context['trace'];
+    }
+
+    return $formatted;
 }
