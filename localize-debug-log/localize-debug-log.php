@@ -273,6 +273,32 @@ function ldl_format_log_with_local_time($log_lines, $timezone) {
 }
 
 /**
+ * 表示用にファイルパス表記を変換
+ *
+ * - mode='file' のとき: " in <path> on line <n>" を " in <basename> on line <n>" に1回だけ置換
+ * - mode='full' のとき: 変換しない
+ *
+ * @param array $log_lines ログ行配列
+ * @param string $mode 'file' | 'full'
+ * @return array 変換後配列
+ */
+function ldl_transform_path_for_display($log_lines, $mode) {
+    if ($mode !== 'file') {
+        return $log_lines;
+    }
+
+    return array_map(function ($line) {
+        // " in <...> on line <number>" の最初の一致のみを置換
+        $pattern = '/ in (.+?) on line (\d+)/';
+        return preg_replace_callback($pattern, function ($m) {
+            $rawPath = str_replace('\\\\', '/', $m[1]);
+            $base = basename($rawPath);
+            return ' in ' . $base . ' on line ' . $m[2];
+        }, $line, 1);
+    }, $log_lines);
+}
+
+/**
  * =============================================================================
  * 機能統合・統合処理
  * =============================================================================
@@ -503,10 +529,15 @@ function ldl_render_log_page() {
         $log_lines_raw = array_reverse($log_lines_raw);
     }
 
-    // HTMLエスケープ：textarea内でのXSS防御
-    $escaped_lines = array_map(function ($line) {
-        return htmlspecialchars($line, ENT_QUOTES, 'UTF-8');
-    }, $log_lines_raw);
+
+	// パス表記切替（表示用）
+	$path_display = function_exists('get_option') ? get_option('ldl_path_display', 'full') : 'full';
+	$display_lines = ldl_transform_path_for_display($log_lines_raw, $path_display);
+
+	// HTMLエスケープ：textarea内でのXSS防御
+	$escaped_lines = array_map(function ($line) {
+		return htmlspecialchars($line, ENT_QUOTES, 'UTF-8');
+	}, $display_lines);
     $log_text_escaped = implode("\n", $escaped_lines);
 
     // Step 3: ログファイルの状態確認（サイズ・存在確認）
@@ -528,27 +559,27 @@ function ldl_render_log_page() {
     echo '<div class="wrap">';
     echo '<h1>Localize Debug Log</h1>';
 
-    // Phase 7: 設定UIブロック（強制キャプチャー・表示順トグル）
-    if (function_exists('is_admin') && is_admin()) {
-        ldl_render_settings_ui();
-    }
-
     // ログ表示エリア：widefulatテーブルレイアウト
     echo '<table class="widefat"><tbody><tr><td>';
     echo '<textarea readonly rows="20" style="width:100%;">' . $log_text_escaped . '</textarea>';
     echo '</td></tr></tbody></table>';
 
-    // Step 6: CSRF保護された削除フォーム
-    echo '<form method="post" style="margin-top:16px;" onsubmit="return confirm(\'本当に削除しますか？この操作は取り消せません。\');">';
+	// Step 6: CSRF保護された削除フォーム
+	echo '<form method="post" style="margin-top:16px;" onsubmit="return confirm(\'本当に削除しますか？この操作は取り消せません。\');">';
 
-    // nonce フィールドの条件付き出力
-    if (function_exists('wp_nonce_field')) {
-        echo wp_nonce_field('ldl_delete_log_action', 'ldl_delete_nonce');
-    }
+	// nonce フィールドの条件付き出力
+	if (function_exists('wp_nonce_field')) {
+		echo wp_nonce_field('ldl_delete_log_action', 'ldl_delete_nonce');
+	}
 
-    echo '<input type="hidden" name="ldl_delete_log" value="1" />';
-    echo '<button type="submit" class="button button-secondary">ログを削除</button>';
-    echo '</form>';
+	echo '<input type="hidden" name="ldl_delete_log" value="1" />';
+	echo '<button type="submit" class="button button-secondary">ログを削除</button>';
+	echo '</form>';
+
+	// Phase 7: 設定UIブロック（強制キャプチャー・表示順トグル）
+	if (function_exists('is_admin') && is_admin()) {
+		ldl_render_settings_ui();
+	}
     echo '</div>';
 }
 
@@ -870,6 +901,10 @@ function ldl_handle_settings_save() {
     $log_order = !empty($_POST['ldl_log_order']) && $_POST['ldl_log_order'] === 'asc' ? 'asc' : 'desc';
     update_option('ldl_log_order', $log_order);
 
+	// パス表示形式の保存（'full' | 'file'）
+	$path_display = (!empty($_POST['ldl_path_display']) && $_POST['ldl_path_display'] === 'file') ? 'file' : 'full';
+	update_option('ldl_path_display', $path_display);
+
     return true;
 }
 
@@ -885,8 +920,9 @@ function ldl_render_settings_ui() {
     $force_capture = ldl_get_option_bool('ldl_force_capture', false);
     $log_order = get_option('ldl_log_order', 'desc');
 
-    echo '<div style="background:#f9f9f9; padding:16px; margin:16px 0; border:1px solid #ddd;">';
-    echo '<h3>設定</h3>';
+	// アコーディオン（details/summary）でデフォルト閉にする
+	echo '<details style="background:#f9f9f9; padding:16px; margin:16px 0; border:1px solid #ddd;">';
+	echo '<summary style="font-size:1.17em; font-weight:bold; cursor:pointer; outline:none;">設定</summary>';
 
     // 設定フォーム開始
     echo '<form method="post" style="margin:0;">';
@@ -925,12 +961,25 @@ function ldl_render_settings_ui() {
     echo '</label>';
     echo '</div>';
 
-    // 保存ボタン
+	// パス表示形式 トグル
+	echo '<div style="margin-bottom:16px;">';
+	echo '<label><strong>ファイルパスの表示:</strong></label><br>';
+	echo '<label style="margin-right:16px;">';
+	echo '<input type="radio" name="ldl_path_display" value="full"' . (function_exists('checked') ? checked(get_option('ldl_path_display', 'full'), 'full', false) : (get_option('ldl_path_display', 'full')==='full'?' checked':'') ) . '>';
+	echo ' フルパス（例: /var/www/.../pluggable_parts.php）';
+	echo '</label>';
+	echo '<label>';
+	echo '<input type="radio" name="ldl_path_display" value="file"' . (function_exists('checked') ? checked(get_option('ldl_path_display', 'full'), 'file', false) : (get_option('ldl_path_display', 'full')==='file'?' checked':'') ) . '>';
+	echo ' ファイル名のみ（例: pluggable_parts.php）';
+	echo '</label>';
+	echo '</div>';
+
+	// 保存ボタン
     echo '<input type="hidden" name="ldl_save_settings" value="1">';
     echo '<button type="submit" class="button button-primary">設定を保存</button>';
 
-    echo '</form>';
-    echo '</div>';
+	echo '</form>';
+	echo '</details>';
 }
 
 /**
@@ -1002,10 +1051,11 @@ function ldl_register_force_capture_handlers() {
     ini_set('log_errors', '1');
     ini_set('error_log', ldl_get_log_path());
 
-    // error_reportingの設定（LDL_FORCE_REPORTING定数がtrueの場合のみ）
-    if (defined('LDL_FORCE_REPORTING') && LDL_FORCE_REPORTING) {
-        error_reporting(E_ALL);
-    }
+	// error_reportingの設定（LDL_FORCE_REPORTING定数がtrueの場合のみ）
+	$ldl_force_reporting = defined('LDL_FORCE_REPORTING') ? (bool) constant('LDL_FORCE_REPORTING') : false;
+	if ($ldl_force_reporting) {
+		error_reporting(E_ALL);
+	}
 
     // 既存ハンドラを保存してからカスタムハンドラを設定
     $GLOBALS['ldl_previous_error_handler'] = set_error_handler('ldl_force_error_handler');
@@ -1102,7 +1152,8 @@ function ldl_format_captured_error($context) {
     $timestamp = gmdate('d-M-Y H:i:s') . ' UTC';
     $type = isset($context['type']) ? strtoupper($context['type']) : 'UNKNOWN';
     $message = isset($context['message']) ? $context['message'] : 'No message';
-    $file = isset($context['file']) ? basename($context['file']) : 'unknown';
+    // 収集はフルパスのまま保持
+    $file = isset($context['file']) ? $context['file'] : 'unknown';
     $line = isset($context['line']) ? $context['line'] : 0;
 
     $formatted = "[{$timestamp}] PHP {$type}: {$message} in {$file} on line {$line}";
