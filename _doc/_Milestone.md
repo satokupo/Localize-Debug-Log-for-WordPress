@@ -208,16 +208,16 @@ TDDスタイルによる開発進行
 **ブランチ：feature/phase7-force-capture-and-ui**
 > 目的: WP 設定に依存せず収集力を高める「強制キャプチャーモード」をオプトインで提供し、UX を改善（管理バー/ログ順トグル）。
 
-- [ ] 強制キャプチャーモード（オプトイン）
-  - [ ] set_error_handler / set_exception_handler / register_shutdown_function の導入（チェーン実装）
-  - [ ] `ini_set('log_errors','1')` と `ini_set('error_log', ...)` の適用（ON時のみ）
-  - [ ] UI トグル（テキストエリア上部）＋説明（効果/注意点）＋保存（option/nonce）
-- [ ] 管理バー改善
-  - [ ] dashicons-admin-generic（歯車）でアイコン文字化け解消
-  - [ ] フロントでも権限者に表示（admin_bar_menu 常時登録）
-- [ ] ログ表示順トグル
-  - [ ] 表示順（desc/asc）を切替可能に（option/nonce）
-  - [ ] 表示のみ並替（収集は不変）
+- [x] 強制キャプチャーモード（オプトイン）
+  - [x] set_error_handler / set_exception_handler / register_shutdown_function（チェーン実装）
+  - [x] `ini_set('log_errors','1')` と `ini_set('error_log', ...)` の適用（ON時のみ）
+  - [x] UI トグル（テキストエリア上部）＋説明（効果/注意点）＋保存（option/nonce）
+- [x] 管理バー改善（純CSSアイコン）
+  - [x] タイトルの `<span class="dashicons ...">` を撤去し、疑似要素CSSで歯車を安定表示
+  - [x] フロントでも権限者に表示（admin_bar_menu 登録 + dashicons 読込）
+- [x] ログ表示順トグル
+  - [x] 表示順（desc/asc）を切替可能に（option/nonce）
+  - [x] 表示のみ並替（収集は不変）
 
 **制約と方針**:
 - WP コア・定数（WP_DEBUG 等）を上書きしない。既定は挙動不変。
@@ -227,6 +227,27 @@ TDDスタイルによる開発進行
 - 強制キャプチャーON時、WP_DEBUG=false でも警告/注意/例外/致命的がファイルに記録される
 - 管理バーが管理画面/フロント双方で正常表示、権限者限定
 - 表示順トグルで即時に並替が反映、既存UI構造/XSS対策/CSRF対策を維持
+
+### 追加作業（Phase 7 追補）
+- [x] 追加作業２: ログ連結解消（収集/表示の二面対応）
+  - [x] 収集: `ldl_format_captured_error()` 末尾に改行を強制付与（連結防止）
+  - [x] 表示: 任意位置の `[DD-MMM-YYYY HH:MM:SS UTC]` を境界とする分割（O(n)・フォールバック付き）
+  - 参考: `_doc/branch-docs/plan/2025-08-12_1_追加作業２.md`
+- [x] 追加作業３: 初期メッセージと削除時の初期化行（UTCタイムスタンプ付与）
+  - [x] 初期状態: `logs/debug.log` が空/不存在なら「ログ削除ボタンを押して初期化してください」を1行出力
+  - [x] 削除後: `[DD-MMM-YYYY HH:MM:SS UTC] 初期化：YYYY-MM-DD {アカウント名}` を1行追記
+  - 参考: `_doc/branch-docs/plan/2025-08-12_2_追加作業３.md`
+
+**Phase 7 完了報告**:
+> **完了日**: 2025-08-12 予定
+> **ブランチ**: feature/phase7-force-capture-and-ui
+> **実装成果**:
+> - 強制キャプチャーモード（ON時のみ有効、既存ハンドラへ委譲）
+> - 管理バーの純CSS歯車アイコン表示（ラベルのみ、疑似要素で描画）
+> - ログ表示順トグル（desc/asc）
+> - 追加作業: ログ連結解消（収集末尾改行＋UTC境界分割）、初期化行の自動記録（UTC+YYYY-MM-DD+ユーザー）
+> **テスト結果**: `npm run test-all` 緑（Skipped含む）: Tests 138, Assertions 545, Skipped 9
+> **関連資料**: `_doc/branch-docs/plan/2025-08-11_4_追加フェーズ７スコープ.md`, `_doc/branch-docs/plan/2025-08-12_1_追加作業２.md`, `_doc/branch-docs/plan/2025-08-12_2_追加作業３.md`
 
 ---
 

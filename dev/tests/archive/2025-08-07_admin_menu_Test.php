@@ -89,9 +89,9 @@ class AdminMenu_Test extends TestCase
     }
 
     /**
-     * 管理バータイトルに dashicons-admin-settings が含まれること
+     * 管理バータイトルがラベル文字列を含むこと（アイコンは疑似要素CSSで描画）
      */
-    public function test_admin_bar_title_contains_dashicon()
+    public function test_admin_bar_title_contains_label()
     {
         // admin_url をモック
         WP_Mock::userFunction('admin_url')
@@ -108,7 +108,7 @@ class AdminMenu_Test extends TestCase
         ldl_add_admin_bar_link($stub);
 
         $this->assertNotEmpty($stub->captured);
-        $this->assertStringContainsString('dashicons-admin-settings', $stub->captured[0]['title']);
+        $this->assertStringContainsString('Localize Debug Log', $stub->captured[0]['title']);
     }
     /**
      * 削除関連のフック登録（admin_init/admin_notices）
