@@ -1,10 +1,10 @@
 {
-  "name": "localize-debug-log-workspace",
-  "private": true,
-  "scripts": {
-    "test": "cmd /c \"cd dev && composer test\"",
-    "test-active": "cmd /c \"cd dev && composer test-active\"",
-    "test-pending": "cmd /c \"cd dev && composer test-pending\"",
-    "test-all": "cmd /c \"cd dev && composer test-all\""
-  }
+	"name": "localize-debug-log-workspace",
+	"private": true,
+	"scripts": {
+		"test": "cd dev && composer test",
+		"test-active": "cd dev && composer test-active",
+		"test-pending": "cd dev && composer test-pending",
+		"test-all": "cd dev && composer test-all"
+	}
 }
