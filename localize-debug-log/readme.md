@@ -4,7 +4,11 @@
 
 WordPress のタイムゾーン設定に基づいて、PHP の `error_log()` 出力を収集し、ローカル時間付きで表示する管理用プラグインです。
 
+PHPのデバッグログはUTCで記録されるため、日本時間でエラーの発生時刻を把握するのに手間がかかります。当時、必要な種類のエラーをまとめて収集し、日本時間とUTCを並べて確認できるプラグインが見つからなかったため、このプラグインを作成しました。
+
 This plugin collects PHP `error_log()` output and displays it with local timestamps based on your WordPress timezone setting.
+
+PHP debug logs are recorded in UTC, which made it cumbersome to relate errors to events in Japan time. This plugin was created because no available tool at the time combined the required error capture with a side-by-side local-time and UTC display.
 
 ---
 
