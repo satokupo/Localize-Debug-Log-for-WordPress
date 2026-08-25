@@ -1,5 +1,7 @@
 # Localize Debug Log for WordPress
 
+> **Current status / 現在の状態:** This is an older development and verification plugin that is no longer used or maintained. It remains public as a past code sample for application review. / 過去に作成した開発・検証用プラグインで、現在は使用・保守していません。応募審査のための旧コード例です。
+
 WordPress のタイムゾーン設定に基づいて、PHP の `error_log()` 出力を収集し、ローカル時間付きで表示する管理用プラグインです。
 
 This plugin collects PHP `error_log()` output and displays it with local timestamps based on your WordPress timezone setting.

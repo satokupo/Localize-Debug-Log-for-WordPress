@@ -18,6 +18,10 @@ _temp/*
 .claude/*
 *.cache
 .phpunit.result.cache
+/CLAUDE.md
+/AGENTS.md
+**/CLAUDE.md
+**/AGENTS.md
 
 ## 機密ファイル
 env.php

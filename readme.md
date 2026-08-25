@@ -1,5 +1,7 @@
 ## Localize Debug Log for WordPress — Repository
 
+> **現在の状態:** 過去に作成した開発・検証用プラグインです。現在は使用・保守していません。応募審査のために旧コードを公開しています。現行案件・運用中のコードではありません。
+
 このリポジトリは、WordPress の `error_log()` をローカル時刻で表示する管理者向けプラグインの開発用プロジェクトです。
 実運用のプラグイン本体は `localize-debug-log/` 配下にあります。
 
@@ -42,5 +44,4 @@ npm run test-all
 ### ライセンス
 - 個人利用に限り使用・改変可。再配布・商用利用は禁止
 - 詳細は `localize-debug-log/LICENSE`
-
 
